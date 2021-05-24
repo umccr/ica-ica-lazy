@@ -98,7 +98,8 @@ Do NOT close the browser until reading the next section
 
 > Ideally one would create one api-key per workgroup, unfortunately scopes of api-keys aren't 
 > respected by the token creation and are as stated above, will be a union of all of a user's workgroups 
-> privileges for a given project. We are hoping this changes in a future release and are still setting up accordingly.  
+> privileges for a given project. We are hoping this changes in a future release and are still setting up accordingly.
+
 
 Use [pass][password_store] to store your api-keys under the following hierarchy -> this needs to be done in order to 
 use the 'tokens-management' section below.  
@@ -115,7 +116,13 @@ To test your api-key saving ability we will try the following code:
 ica tokens create --project-name "development" --api-key "$(pass "/ica/api-keys/development")"
 ```
 
-If a whole bunch of random letters and numbers came up on your terminal, congrats! You can move on to the next section.  
+If a whole bunch of random letters and numbers came up on your terminal, congrats! You can move on to the next section.
+
+:warning:
+You must also save a 'personal' (by checking all workgroup contexts) api-key under `/ica/api-keys/default-api-key`.  
+While the scripts below are based off a 1:1 mapping between workgroups and projects, there will be some projects that
+do not have an associated workgroup. Since for this ICA release, token creation doesn't depend on the scope on the api-key
+we can fall back on this api-key (default-api-key) in the event there is no set workgroup for a given project.   
 
 ### Using this repo :construction:
 
@@ -128,7 +135,7 @@ cd "iil-release-<version>"
 bash install.sh
 ```
 
-This will prompt you to add a few lines to your `~/.zshrc` and `~/.bashrc`
+This will prompt you to add a few lines to your `~/.zshrc` (MacOS users) or `~/.bashrc` (Linux or WSL users)
 
 #### Setup
 
@@ -136,14 +143,23 @@ This will prompt you to add a few lines to your `~/.zshrc` and `~/.bashrc`
 
 This section entails:
 
-1. `ica-refresh-access-token`
+1. `ica-add-access-token` :construction:
+   * Adds an access token to `~/.ica-ica-lazy/tokens/tokens.json`
+   * Requires a project name
+1. `ica-refresh-access-token` :construction:
    * Refreshing an expired token
    * Set up of the tokens management section
    * For development, production and other projects
    * To be an automated process when tokens expire :construction:
-2. `ica-context-switcher`
+2. `ica-context-switcher` :construction:
    * Change contexts by updating the `ICA_ACCESS_TOKEN` env var to that of your project
    * Does NOT require login
+   
+### ica-refresh-access-token :construction:
+
+This command will update your token for a given project under `~/.ica/ica-ica-lazy-access-tokens.json`
+
+
 
 ## Folder / file traversal :construction:
 
