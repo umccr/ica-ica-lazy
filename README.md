@@ -9,7 +9,6 @@
   - [Creating an api-key](#creating-an-api-key)
   - [Saving your api-key](#saving-your-api-key)
   - [Using this repo](#using-this-repo)
-    - [Setup](#setup)
 - [Tokens management](#tokens-management)
   - [ica-add-access-token](#ica-add-access-token)
   - [ica-context-switcher](#ica-context-switcher)
@@ -141,11 +140,13 @@ ica tokens create --project-name "development" --api-key "$(pass "/ica/api-keys/
 
 If a whole bunch of random letters and numbers came up on your terminal, congrats! You can move on to the next section.
 
-:warning:
-You must also save a 'personal' (by checking all workgroup contexts) api-key under `/ica/api-keys/default-api-key`.  
+:warning:  
+You must also save a 'personal' api-key (by checking all workgroup contexts) under `/ica/api-keys/default-api-key`.  
 While the scripts below are based off a 1:1 mapping between workgroups and projects, there will be some projects that
 do not have an associated workgroup. Since for this ICA release, token creation doesn't depend on the scope on the api-key
-we can fall back on this api-key (default-api-key) in the event there is no set workgroup for a given project.   
+we can fall back on this api-key (default-api-key) in the event there is no set workgroup for a given project.     
+> Please do NOT select an api-key created prior to Jan 30 2021.    
+> Please create a new api key if you do not have an existing api-key created after said date.  
 
 ### Using this repo
 
