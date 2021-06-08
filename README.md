@@ -1,6 +1,24 @@
-# ICA-ICA-Lazy
+# ICA-ICA-Lazy <!-- omit in toc -->
 
-TOC # TODO
+- [Vanilla (Getting started)](#vanilla-getting-started)
+  - [Downloading the ica binary](#downloading-the-ica-binary)
+  - [Setting up the ica config](#setting-up-the-ica-config)
+  - [Configure ica](#configure-ica)
+  - [Logging in to ica](#logging-in-to-ica)
+  - [Navigating the cli](#navigating-the-cli)
+  - [Creating an api-key](#creating-an-api-key)
+  - [Saving your api-key](#saving-your-api-key)
+  - [Using this repo :construction:](#using-this-repo-construction)
+    - [Setup](#setup)
+- [Tokens management](#tokens-management)
+  - [ica-refresh-access-token :construction:](#ica-refresh-access-token-construction)
+- [Folder / file traversal :construction:](#folder--file-traversal-construction)
+  - [`gds-ls`](#gds-ls)
+  - [`gds-view`](#gds-view)
+- [Data sharing scripts :construction:](#data-sharing-scripts-construction)
+  - [`gds-sync-download` :construction:](#gds-sync-download-construction)
+  - [`gds-sync-upload` :construction:](#gds-sync-upload-construction)
+- [VIP - (Advanced scripts) :construction:](#vip---advanced-scripts-construction)
 
 ## Vanilla (Getting started)
 
@@ -19,7 +37,7 @@ You may download the ica binary from [here][ica_binary_download].
 > Please make sure you're logged in with your Illumina account (see top right hand corner).
 > This account is separate to your GSuite account
 
-If you do not have an account with Illumina you can create on [here][illumina_account_creation].
+If you do not have an account with Illumina you can create one [here][illumina_account_creation].
 
 ### Setting up the ica config
 
@@ -27,6 +45,10 @@ Once you have downloaded the binary file, you will need to make sure that you've
 and add it to your path. The following lines may assist you:
 
 ```shell
+# Use wget to download the url
+wget --output-document ica.zip "<presigned_url>"
+# Unzip the download
+unzip ica.zip
 # Make the ica binary executable
 chmod +x "${HOME}/Downloads/ica"
 # Add binary to common bin path
@@ -39,7 +61,7 @@ UMCCR links to ICA via sso (through our GSuite accounts).
 
 Run the configuration subcommand and respond to the prompts:
 
-* `server-url` should be set to `aps.platform.illumina.com`
+* `server-url` should be set to `aps2.platform.illumina.com`
 * `domain` should be set to `umccr`
 * `output-format` either 'table' or 'json'
 
@@ -139,27 +161,54 @@ This will prompt you to add a few lines to your `~/.zshrc` (MacOS users) or `~/.
 
 #### Setup
 
-## Tokens management :construction:
+## Tokens management
 
 This section entails:
 
-1. `ica-add-access-token` :construction:
-   * Adds an access token to `~/.ica-ica-lazy/tokens/tokens.json`
-   * Requires a project name
-1. `ica-refresh-access-token` :construction:
-   * Refreshing an expired token
-   * Set up of the tokens management section
-   * For development, production and other projects
-   * To be an automated process when tokens expire :construction:
-2. `ica-context-switcher` :construction:
+1. `ica-add-access-token`
+   * Retrieves api-key from pass db
+   * Requires project name and scope as input
+   * Writes token to `~/.ica-ica-lazy/tokens/tokens.json`
+   * 
+2. `ica-context-switcher`
    * Change contexts by updating the `ICA_ACCESS_TOKEN` env var to that of your project
    * Does NOT require login
    
-### ica-refresh-access-token :construction:
+### ica-add-access-token
+> Autocompletion: :construction:
 
-This command will update your token for a given project under `~/.ica/ica-ica-lazy-access-tokens.json`
+This command will update your token for a given project under `~/.ica-ica-lazy/tokens/tokens.json`.  
+Pleas make sure you've read the [Saving your api key](#saving-your-api-key) section before trying.
+
+*To verify, you've successfully completed said section, please run `pass /ica/api-keys/default-api-key`.  
+One would expect this to return your personal api key.*
+
+**Options:**
+  * --project-name: The name of your project
+  * --scope: Do you want to enter this context with 'admin' or 'read-only' privileges
+
+**Requirements:**
+  * curl
+  * jq
+  * pass
+
+**Environment vars:**
+  * ICA_BASE_URL
 
 
+### ica-context-switcher
+> Autocompletion: :construction:
+
+Update the `ICA_ACCESS_TOKEN` env var in your current console window with that of a stored token under
+`~/.ica-ica-lazy/tokens/tokens.json`.  You **MUST** have first added the token to the secret file with `ica-add-access-token` script.  
+
+**Options:**
+  * --project-name: The name of your project
+  * --scope: Do you want to enter this context with 'admin' or 'read-only' privileges
+
+**Requirements**
+  * curl
+  * jq
 
 ## Folder / file traversal :construction:
 
@@ -172,9 +221,41 @@ This section entails:
 
 ### `gds-ls`
 > auto-completion :white_check_mark:
+
+Run ls on a GDS file system as if it were your local system.  
+
+**Options:**
+  * folder-path: Single positional argument.
+
+**Requirements:**
+  * curl
+  * jq
+  * python3
+
+**Environment vars:**
+  * ICA_BASE_URL
+  * ICA_ACCESS_TOKEN
+
  
 ### `gds-view`
-> auto-completion: :construction:
+> auto-completion :construction:
+
+View a gds file without first needing to download it.  
+Works for gzipped files too.  Uses the links program (through docker) to
+visualise the file.  
+
+**Options:**
+  * --gds-path: Path to the gds file you wish to view.
+
+**Requirements:**
+  * curl
+  * jq
+  * python3
+  * docker
+
+**Environment vars:**
+  * ICA_BASE_URL
+  * ICA_ACCESS_TOKEN
 
 ## Data sharing scripts :construction:
 
@@ -184,20 +265,68 @@ This section entails:
    * For syncing a gds folder with a local path
 2. Using `gds-sync-upload`
    * For syncing a local path with a gds folder
-
+ 
 ### `gds-sync-download` :construction:
 > auto-completion: :construction:
 
+Sync a gds folder with a local directory using the temporary aws creds
+in a given gds folder.  This function requires admin privileges in the source project.  
+
+**Options:**  
+  * --gds-path:  Path to the gds folder
+  * --download-path:  Path to your local directory
+
+**Requirements:**
+  * curl
+  * jq
+  * python3  
+  * aws
+
+**Environment vars:**
+  * ICA_BASE_URL
+  * ICA_ACCESS_TOKEN
+
+**Extra info:**
+
+*  You can also use any of the aws s3 sync parameters to add to the command list, for example:
+   ```
+   gds-sync-download --gds-path gds://volume-name/path-to-folder/ --exclude='*' --include='*.fastq.gz'
+   ```
+   will download only fastq files from that folder.
+           
+   * If you are unsure on what files will be downloaded, use the `--dryrun` parameter. This will inform you of which
+     files will be downloaded to your local file system.
+   
+   * Unlike rsync, trailing slashes on the `--gds-path` and `--download-path` do not matter. One can assume that
+     a trailing slash exists on both parameters. This means that the contents inside the `--gds-path` parameter are
+     downloaded to the contents inside `--download-path`
 
 ### `gds-sync-upload` :construction:
 > auto-completion: :construction:
+
+Sync a local directory with a gds folder using the temporary aws creds in a given gds folder.  
+This function requires admin privileges in the destination project.  
+
+**Options:**  
+  * --src-path:  Path to your local directory
+  * --gds-path:  Path to the gds folder
+
+**Requirements:**
+  * curl
+  * jq
+  * python3  
+  * aws
+
+**Environment vars:**
+  * ICA_BASE_URL
+  * ICA_ACCESS_TOKEN
 
 ## VIP - (Advanced scripts) :construction:
 > auto-completion: :construction:
 
 This section entails:
 
-1. Running [illumination][illumination]
+1. Running [illumination][illumination]  :construction:  
 
 
 [illumina_account_creation]: https://login.illumina.com/platform-services-manager/#/
