@@ -8,16 +8,17 @@
   - [Navigating the cli](#navigating-the-cli)
   - [Creating an api-key](#creating-an-api-key)
   - [Saving your api-key](#saving-your-api-key)
-  - [Using this repo :construction:](#using-this-repo-construction)
+  - [Using this repo](#using-this-repo)
     - [Setup](#setup)
 - [Tokens management](#tokens-management)
-  - [ica-refresh-access-token :construction:](#ica-refresh-access-token-construction)
-- [Folder / file traversal :construction:](#folder--file-traversal-construction)
+  - [ica-add-access-token](#ica-add-access-token)
+  - [ica-context-switcher](#ica-context-switcher)
+- [Folder / file traversal](#folder--file-traversal)
   - [`gds-ls`](#gds-ls)
   - [`gds-view`](#gds-view)
-- [Data sharing scripts :construction:](#data-sharing-scripts-construction)
-  - [`gds-sync-download` :construction:](#gds-sync-download-construction)
-  - [`gds-sync-upload` :construction:](#gds-sync-upload-construction)
+- [Data sharing scripts](#data-sharing-scripts)
+  - [`gds-sync-download`](#gds-sync-download)
+  - [`gds-sync-upload`](#gds-sync-upload)
 - [VIP - (Advanced scripts) :construction:](#vip---advanced-scripts-construction)
 
 ## Vanilla (Getting started)
@@ -146,20 +147,18 @@ While the scripts below are based off a 1:1 mapping between workgroups and proje
 do not have an associated workgroup. Since for this ICA release, token creation doesn't depend on the scope on the api-key
 we can fall back on this api-key (default-api-key) in the event there is no set workgroup for a given project.   
 
-### Using this repo :construction:
+### Using this repo
 
 Now it's time to set you up with this repo.  
 
-Download the zip file from the [releases page][releases_page] :construction:
+Download the zip file from the [releases page][releases_page]
 Unzip the file and run:
 ```bash
-cd "iil-release-<version>"
+cd "release-<version>"
 bash install.sh
 ```
 
 This will prompt you to add a few lines to your `~/.zshrc` (MacOS users) or `~/.bashrc` (Linux or WSL users)
-
-#### Setup
 
 ## Tokens management
 
@@ -175,7 +174,7 @@ This section entails:
    * Does NOT require login
    
 ### ica-add-access-token
-> Autocompletion: :construction:
+> Autocompletion: :white_check_mark:
 
 This command will update your token for a given project under `~/.ica-ica-lazy/tokens/tokens.json`.  
 Pleas make sure you've read the [Saving your api key](#saving-your-api-key) section before trying.
@@ -197,7 +196,7 @@ One would expect this to return your personal api key.*
 
 
 ### ica-context-switcher
-> Autocompletion: :construction:
+> Autocompletion: :white_check_mark:
 
 Update the `ICA_ACCESS_TOKEN` env var in your current console window with that of a stored token under
 `~/.ica-ica-lazy/tokens/tokens.json`.  You **MUST** have first added the token to the secret file with `ica-add-access-token` script.  
@@ -210,7 +209,7 @@ Update the `ICA_ACCESS_TOKEN` env var in your current console window with that o
   * curl
   * jq
 
-## Folder / file traversal :construction:
+## Folder / file traversal
 
 This section entails:
 
@@ -238,7 +237,7 @@ Run ls on a GDS file system as if it were your local system.
 
  
 ### `gds-view`
-> auto-completion :construction:
+> auto-completion :white_check_mark:
 
 View a gds file without first needing to download it.  
 Works for gzipped files too.  Uses the links program (through docker) to
@@ -257,7 +256,7 @@ visualise the file.
   * ICA_BASE_URL
   * ICA_ACCESS_TOKEN
 
-## Data sharing scripts :construction:
+## Data sharing scripts
 
 This section entails:
 
@@ -266,8 +265,8 @@ This section entails:
 2. Using `gds-sync-upload`
    * For syncing a local path with a gds folder
  
-### `gds-sync-download` :construction:
-> auto-completion: :construction:
+### `gds-sync-download`
+> auto-completion: :white_check_mark:
 
 Sync a gds folder with a local directory using the temporary aws creds
 in a given gds folder.  This function requires admin privileges in the source project.  
@@ -301,8 +300,8 @@ in a given gds folder.  This function requires admin privileges in the source pr
      a trailing slash exists on both parameters. This means that the contents inside the `--gds-path` parameter are
      downloaded to the contents inside `--download-path`
 
-### `gds-sync-upload` :construction:
-> auto-completion: :construction:
+### `gds-sync-upload`
+> auto-completion: :white_check_mark:
 
 Sync a local directory with a gds folder using the temporary aws creds in a given gds folder.  
 This function requires admin privileges in the destination project.  
@@ -328,7 +327,7 @@ This section entails:
 
 1. Running [illumination][illumination]  :construction:  
 
-
+[releases_page]: https://github.com/umccr/ica-ica-lazy/releases
 [illumina_account_creation]: https://login.illumina.com/platform-services-manager/#/
 [ica_binary_download]: https://sapac.support.illumina.com/downloads/illumina-connected-analytics-cli-v1-0.html
 [ica_landing_page]: https://umccr.login.illumina.com/#/home
