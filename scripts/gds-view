@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+
+: '
+Uses docker links to view the gds file through its presigned url
+'
+
+set -euo pipefail
+
+print_help(){
+  echo "
+        Usage: gds-view --gds-path gds://volume-name/path-to-file
+
+        Options:
+            -g / --gds-path: Path to gds file
+
+        Requirements:
+          * docker
+          * jq
+          * python3
+
+        Environment:
+          * ICA_BASE_URL
+          * ICA_ACCESS_TOKEN
+
+        The program runs the links binary through docker to
+        the gds path via a presigned url.  This can be used on text files and even gzipped files!
+        "
+}
+
+# Inputs
+gds_path=""
+access_token="${ICA_ACCESS_TOKEN}"
+base_url="${ICA_BASE_URL}"
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -g|--gds-path)
+            gds_path="$2"
+            shift 1
+        ;;
+        -h|--help)
+            print_help
+            exit 1
+    esac
+    shift
+done
+
+###########
+# FUNCTIONS
+###########
+
+# Get volume
+get_volume_from_gds_path(){
+  : '
+  Assumes urllib is available on python3
+  '
+  local gds_path="$1"
+  # Returns the netloc attribute of the gds_path
+  python3 -c "from urllib.parse import urlparse; print(urlparse(\"${gds_path}\").netloc)"
+}
+
+# Get file path
+get_file_path_from_gds_path(){
+  : '
+  Assumes urllib is available on python3
+  '
+  local gds_path="$1"
+  # Returns the path attribute of gds_path input
+  python3 -c "from urllib.parse import urlparse; print(urlparse(\"${gds_path}\").path)"
+}
+
+get_file_id(){
+  : '
+  Use files list on the file and collect the file id from the single item
+  '
+  local volume_name="$1"
+  local file_path="$2"
+  local access_token="$3"
+  local base_url="$4"
+  # Pipe curl output into jq to collect ID and return
+  curl \
+    --silent \
+    --request GET \
+    --header "Authorization: Bearer ${access_token}" \
+    "${base_url}/v1/files?volume.name=${volume_name}&path=${file_path}" | \
+  jq \
+    --raw-output \
+    '.items[] | .id'
+}
+
+get_presigned_url_from_file_id(){
+  : '
+  Use files list on the file and collect the file id from the single item
+  '
+  local file_id="$1"
+  local access_token="$2"
+  local base_url="$3"
+  curl \
+    --silent \
+    --request GET \
+    --header "Authorization: Bearer ${access_token}" \
+    "${base_url}/v1/files/${file_id}" | \
+  jq \
+    --raw-output \
+    '.presignedUrl'
+}
+
+run_links(){
+  : '
+  Runs the links container
+  '
+  local presigned_url="$1"
+  # Send through to links
+  docker run \
+    --rm \
+    -it \
+    --entrypoint "links" \
+    umccr/alpine-links:latest \
+    	"${presigned_url}"
+}
+
+# Checks, ensure access_token is set
+if [[ -z "${access_token}" ]]; then
+  echo "Error: Need to set ICA_ACCESS_TOKEN env var" 1>&2
+  print_help
+  exit 1
+elif [[ -z "${base_url}" ]]; then
+  echo_stderr "Please set the env var ICA_BASE_URL"
+  print_help
+  exit 1
+fi
+
+# Get volume name / get file path from gds path
+volume_name="$(get_volume_from_gds_path "${gds_path}")"
+file_path="$(get_file_path_from_gds_path "${gds_path}")"
+
+# Collect file id
+file_id="$(get_file_id "${volume_name}" "${file_path}" "${access_token}" "${base_url}")"
+
+# Collect presigned url
+presigned_url="$(get_presigned_url_from_file_id "${file_id}" "${access_token}" "${base_url}")"
+
+# Run links through docker
+run_links "${presigned_url}"
