@@ -1,0 +1,17 @@
+---
+name: ica-add-access-token
+
+title: Add an access token
+
+# TODO - these are for the context switcher
+# Need a curl command to list projects from an existing access token?
+options:
+  - name: project-name
+    summary: |
+      Name of the project
+    type: string
+  - name: scope
+    summary: |
+      The privilege level you'd like to associate with the token
+    type: string
+    enum: [ admin, read-only ]
