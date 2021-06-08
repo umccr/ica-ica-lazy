@@ -16,7 +16,7 @@ _gds-sync-download() {
     MYWORDS=("${words[@]:1:$cword}")
 
     FLAGS=('--help' 'Show command help' '-h' 'Show command help')
-    OPTIONS=('--download-path' 'The directory you'"\\'"'d like to download to
+    OPTIONS=('--download-path' 'The directory you would like to download to
 ' '--gds-path' 'The gds folder path
 ')
     __gds-sync-download_handle_options_flags

@@ -16,13 +16,13 @@ _gds-sync-upload() {
     MYWORDS=("${words[@]:1:$cword}")
 
     FLAGS=('--help' 'Show command help' '-h' 'Show command help')
-    OPTIONS=('--upload-path' 'The directory you'"\\'"'d like to upload to
+    OPTIONS=('--src-path' 'The directory you would like to upload to
 ' '--gds-path' 'The gds folder path
 ')
     __gds-sync-upload_handle_options_flags
 
     case ${MYWORDS[$INDEX-1]} in
-      --upload-path)
+      --src-path)
         compopt -o dirnames
         return
       ;;

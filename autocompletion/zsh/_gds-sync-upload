@@ -10,8 +10,8 @@ _gds-sync-upload() {
 
         # ---- Command: 
         _arguments -s  \
-            '--upload-path[The directory you'"'"'d like to upload to
-]:upload-path:_path_files -/' \
+            '--src-path[The directory you would like to upload to
+]:src-path:_path_files -/' \
             '--gds-path[The gds folder path
 ]:gds-path:_gds-sync-upload__option_gds_path_completion' \
             '--help[Show command help]' \

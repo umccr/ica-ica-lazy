@@ -10,7 +10,7 @@ _gds-sync-download() {
 
         # ---- Command: 
         _arguments -s  \
-            '--download-path[The directory you'"'"'d like to download to
+            '--download-path[The directory you would like to download to
 ]:download-path:_path_files -/' \
             '--gds-path[The gds folder path
 ]:gds-path:_gds-sync-download__option_gds_path_completion' \
