@@ -21,7 +21,7 @@
   - [`gds-sync-download`](#gds-sync-download)
   - [`gds-sync-upload`](#gds-sync-upload)
 - [VIP - (Advanced scripts) :construction:](#vip---advanced-scripts-construction)
-  - [Running Illumination](#running-illumination)
+  - [`ica-illumination`](#ica-illumination)
 
 ## Vanilla (Getting started)
 
@@ -160,9 +160,17 @@ use the 'tokens-management' section below.
 pass add "/ica/api-keys/default-api-key"
 ```
 
-Then paste in the api-key token as the password value.  
+Then paste in the api-key token as the password.  
 
-To test your api-key saving ability we will try the following code (you will need to be logged in to ica for this test):
+To test your pass db works run:  
+
+```shell
+pass "/ica/api-keys/default-api-key"
+```
+
+You may be prompted to enter your gpg password.  
+
+To test your token creation ability, we will try the following code (you will need to be logged in to ica for this test):
 
 ```shell
 ica tokens create --project-name "development" --api-key "$(pass "/ica/api-keys/default-api-key")"
@@ -171,7 +179,7 @@ ica tokens create --project-name "development" --api-key "$(pass "/ica/api-keys/
 If a whole bunch of random letters and numbers came up on your terminal, congrats! You can move on to the next section.
 
 :warning:  
-> Please do NOT select an api-key created prior to Jan 30 2021.    
+> Please do NOT use an api-key created prior to Jan 30 2021.    
 > Please create a new api key if you do not have an existing api-key created after said date.  
 
 ### Using this repo
@@ -185,7 +193,8 @@ cd "release-<version>"
 bash install.sh
 ```
 
-This will prompt you to add a few lines to your `~/.zshrc` (MacOS users) or `~/.bashrc` (Linux or WSL users)
+This will prompt you to add a few lines to your `~/.zshrc` (MacOS users) or `~/.bashrc` (Linux or WSL users).  If you are running MacOS,  
+you may be prompted to update your existing shell.  
 
 ## Tokens management
 

@@ -16,6 +16,7 @@ set -euo pipefail
 #########
 
 main_dir="${HOME}/.ica-ica-lazy"
+default_api_key_path="/ica/api-keys/default-api-key"
 
 help_message="Usage: install.sh
 Installs ica-ica-lazy software and scripts into users home directory'.
@@ -48,7 +49,7 @@ check_readlink_program() {
     readlink_program="readlink"
   fi
 
-  if ! type "${readlink_program}"; then
+  if ! type "${readlink_program}" 1>/dev/null; then
       if [[ "${readlink_program}" == "greadlink" ]]; then
         echo_stderr "On a mac but 'greadlink' not found"
         echo_stderr "Please run 'brew install coreutils' and then re-run this script"
@@ -140,6 +141,16 @@ if [[ "${user_shell}" == "bash" ]]; then
     echo_stderr "############################"
     exit 1
   fi
+fi
+
+# Check pass db
+echo_stderr "Checking pass db has a value at /ica/api-keys/default-api-key"
+echo_stderr "You may be prompted for your gpg password in a few seconds"
+sleep 4
+
+if ! pass "${default_api_key_path}" 1>/dev/null; then
+  echo_stderr "Could not confirm an api key at /ica/api-keys/default-api-key in your pass db"
+  exit 1
 fi
 
 #############
