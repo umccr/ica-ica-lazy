@@ -119,6 +119,29 @@ fi
 
 user_shell="$(get_user_shell)"
 
+# Check bash help
+if [[ "${user_shell}" == "bash" ]]; then
+  # Check bash version
+  if [[ "$( echo "${BASH_VERSION}" | cut -d'.' -f1)" -le "4" ]]; then
+    echo_stderr "Please upgrade to bash version 4 or higher, if you are running MacOS then please run 'brew install bash' then re-run the installation scripts"
+    exit 1
+  fi
+
+  # Check _init_completion installation - particularly for macos
+  if ! (bash -ic "type _init_completion 1>/dev/null"); then
+    echo_stderr "Could not find the command '_init_completion' which is necessary for auto-completion scripts"
+    echo_stderr "If you are running on MacOS, please run the following command:"
+    echo_stderr "brew install bash-completion"
+    echo_stderr "Then add the following lines to your .bashrc"
+    echo_stderr "#######INIT COMPLETION######"
+    echo_stderr "if [ -f \$(brew --prefix)/etc/bash_completion ]; then"
+    echo_stderr "  . \$(brew --prefix)/etc/bash_completion"
+    echo_stderr "fi"
+    echo_stderr "############################"
+    exit 1
+  fi
+fi
+
 #############
 # CREATE DIRS
 #############
