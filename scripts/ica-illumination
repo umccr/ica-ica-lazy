@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+
+: '
+Runs the illumination docker container over a given port (default 3000)
+'
+
+set -euo pipefail
+
+#########
+# GLOBALS
+#########
+DEFAULT_PORT="3000"
+DEFAULT_SCOPE="read-only"
+TOKENS_PATH="$HOME/.ica-ica-lazy/tokens/tokens.json"
+
+echo_stderr(){
+  echo "$@" 1>&2
+}
+
+print_help(){
+  echo "
+  Usage ica-illumination (--project-name <project-name>) [--port 3000]
+
+  Description:
+    Run illumination for a project context on a localhost port (default 3000)
+
+  Options:
+    --project-name: Name of project context
+    --port: Local host port (Default: 3000)
+
+  Requirements:
+    * jq
+    * docker
+  "
+}
+
+get_access_token(){
+  : '
+  Check the level of the scope
+  '
+  # Func inputs
+  local project_name="$1"
+  local scope="$2"
+  local tokens_file_path="$3"
+  local in_json
+  local project_access_token
+  in_json="$(cat "${tokens_file_path}")"
+  project_access_token="$(jq \
+                            --raw-output \
+                            --arg project_name "${project_name}" \
+                            --arg scope "${scope}" \
+                          '.[$project_name][$scope]' <<< "${in_json}")"
+  echo "${project_access_token}"
+}
+
+check_binaries(){
+  : '
+  Make sure that jq / docker binaries exists in PATH
+  '
+  if ! (type docker jq 1>/dev/null); then
+    return 1
+  fi
+}
+
+run_illumination_docker(){
+  : '
+  Run the Illumination docker container
+  '
+  # Inputs
+  ica_access_token="$1"
+  port="$2"
+
+  echo_stderr "Running illumination on port ${port}"
+  # Run docker
+  docker run \
+    -it \
+    --rm \
+    --detach \
+    --env "IAP_TOKEN=${ica_access_token}" \
+    --env "PORT=${port}" \
+    --publish "${port}:${port}" \
+    "umccr/illumination:latest"
+}
+
+# Inputs
+port="${DEFAULT_PORT}"
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --project-name)
+            project_name="$2"
+            shift 1
+        ;;
+        --port)
+            port="$2"
+            shift 1
+        ;;
+        -h|--help)
+            print_help
+            exit 1
+    esac
+    shift
+done
+
+# Check binaries
+if ! check_binaries; then
+  echo_stderr "Please make sure that jq and docker"
+  exit 1
+fi
+
+# Check project name is defined
+if [[ -z "${project_name-}" ]]; then
+  echo_stderr "Error: Need to set --project-name var" 1>&2
+  print_help
+  exit 1
+fi
+
+# Get access token
+project_access_token="$(get_access_token "${project_name}" "${DEFAULT_SCOPE}" "${TOKENS_PATH}")"
+
+# Run illumination
+docker_id="$(run_illumination_docker "${project_access_token}" "${port}")"
+
+# Check id
+if [[ -z "${docker_id}" ]]; then
+  echo_stderr "Could not get docker container id"
+fi
+
+echo_stderr "Docker launched Illumination successfully"
+echo_stderr "Please head to localhost://${port} on your preferred browser"
+
+docker_name="$(docker container inspect "${docker_id}" | jq '.[0].Name' | sed '%\/%%')"
+
+echo_stderr "To stop the container, please run 'docker kill \"${docker_name}\"'"

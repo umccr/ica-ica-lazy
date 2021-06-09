@@ -19,6 +19,7 @@
   - [`gds-sync-download`](#gds-sync-download)
   - [`gds-sync-upload`](#gds-sync-upload)
 - [VIP - (Advanced scripts) :construction:](#vip---advanced-scripts-construction)
+  - [Running Illumination](#running-illumination)
 
 ## Vanilla (Getting started)
 
@@ -326,7 +327,22 @@ This function requires admin privileges in the destination project.
 
 This section entails:
 
-1. Running [illumination][illumination]  :construction:  
+1. Illumination
+2. Work in progress...
+
+### Running Illumination
+> auto-completion: :white_check_mark:
+
+Launch [illumination][illumination] in a given project context.  
+This will require you to have added the 'read-only' token to a given project.  
+
+**Options:**
+  * --project-name
+  * --port
+
+**Requirements:**
+  * docker
+  * jq
 
 [releases_page]: https://github.com/umccr/ica-ica-lazy/releases
 [illumina_account_creation]: https://login.illumina.com/platform-services-manager/#/
@@ -334,4 +350,5 @@ This section entails:
 [ica_landing_page]: https://umccr.login.illumina.com/#/home
 [password_store]: https://www.passwordstore.org/
 [illumination]: https://github.com/umccr/illumination
+
 [pass_tutorial]: https://droidrant.com/notes-pass-unix-password-manager/
