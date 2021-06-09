@@ -7,7 +7,7 @@ Obtain the aws access credentials for a gds folder then run the aws sync command
 # Help function
 print_help(){
   echo "
-        Usage: gds-sync-download --gds-path gds://volume-name/path-to-folder/ --download-path downloads/
+        Usage: gds-sync-download (--gds-path gds://volume-name/path-to-folder/) (--download-path downloads/)
 
         Options:
             -g / --gds-path: Path to gds file
@@ -317,3 +317,5 @@ export AWS_SECRET_ACCESS_KEY="${aws_secret_access_key}"
 export AWS_SESSION_TOKEN="${aws_session_token}"
 export AWS_DEFAULT_REGION="${aws_default_region}"
 eval aws s3 sync "s3://${aws_bucket_name}/${aws_key_prefix}" "${download_path}" '"${aws_s3_sync_args[@]}"'
+
+echo_stderr "Upload complete"

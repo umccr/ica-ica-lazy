@@ -207,7 +207,7 @@ add_token_to_json_file(){
 
 print_help(){
   echo "
-  Usage ica-add-access-token [--project-name <project-name>] [--scope read-only|admin]
+  Usage ica-add-access-token (--project-name <project-name>) (--scope read-only|admin)
 
   Description:
     Creates and adds an access token to a restricted file in your home directory.

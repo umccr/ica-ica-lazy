@@ -8,7 +8,7 @@ set -euo pipefail
 
 print_help(){
   echo "
-        Usage: gds-view --gds-path gds://volume-name/path-to-file
+        Usage: gds-view (--gds-path gds://volume-name/path-to-file)
 
         Options:
             -g / --gds-path: Path to gds file

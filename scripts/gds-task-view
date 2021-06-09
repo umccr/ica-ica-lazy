@@ -8,7 +8,7 @@ set -euo pipefail
 
 print_help(){
   echo "
-        Usage: gds-task-view [ --task-run-id trn.abcdef12345678910 ] [ --stdout | --stderr ]
+        Usage: gds-task-view (--task-run-id trn.abcdef12345678910 ) ( --stdout | --stderr )
 
         Description:
           Given a task run id and --stdout, --stderr value, view the log file.

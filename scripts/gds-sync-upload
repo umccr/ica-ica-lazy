@@ -12,7 +12,7 @@ You will need the following binaries:
 # Help function
 print_help(){
   echo "
-        Usage: gds-sync-upload --gds-path gds://volume-name/path-to-folder/ --src-path downloads/
+        Usage: gds-sync-upload (--gds-path gds://volume-name/path-to-folder/) (--src-path downloads/)
 
         Description:
           Upload a directory to gds through aws sync credentials
@@ -364,3 +364,5 @@ export AWS_SECRET_ACCESS_KEY="${aws_secret_access_key}"
 export AWS_SESSION_TOKEN="${aws_session_token}"
 export AWS_DEFAULT_REGION="${aws_default_region}"
 eval aws s3 sync "${src_path}" "s3://${aws_bucket_name}/${aws_key_prefix}" '"${aws_s3_sync_args[@]}"'
+
+echo_stderr "Upload complete"
