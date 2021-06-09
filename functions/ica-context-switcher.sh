@@ -41,7 +41,7 @@ ica-context-switcher(){
     : '
     Make sure that ICA BASE URL is set
     '
-    if [[ ! -v ICA_BASE_URL ]]; then
+    if [[ -z "${ICA_BASE_URL-}" ]]; then
       _echo_stderr "Env var ICA_BASE_URL is not set"
       return 1
     fi
@@ -113,13 +113,13 @@ ica-context-switcher(){
   done
 
   # Check args
-  if [[ ! -v project_name ]]; then
+  if [[ -z "${project_name-}" ]]; then
     _echo_stderr "--project-name not defined"
     _print_help
     return 1
   fi
 
-  if [[ ! -v scope ]]; then
+  if [[ -z "${scope-}" ]]; then
     # Set scope to 'read-only'
     scope="read-only"
   elif [[ "${scope}" != "admin" && "${scope}" != "read-only" ]]; then
@@ -157,5 +157,7 @@ ica-context-switcher(){
   # Export the access token
   ICA_ACCESS_TOKEN="${ica_access_token}"
   export ICA_ACCESS_TOKEN
+
+  _echo_stderr "Successfully switched to ICA project \"${project_name}\" with scope level \"${scope}\""
 }
 

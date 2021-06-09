@@ -56,7 +56,7 @@ check_env_vars(){
   : '
   Make sure that ICA BASE URL is set
   '
-  if [[ ! -v ICA_BASE_URL ]]; then
+  if [[ -z "${ICA_BASE_URL-}" ]]; then
     echo_stderr "Env var ICA_BASE_URL is not set"
     return 1
   fi
@@ -254,13 +254,13 @@ while [ $# -gt 0 ]; do
 done
 
 # Check args
-if [[ ! -v project_name ]]; then
+if [[ -z "${project_name-}" ]]; then
   echo_stderr "--project-name not defined"
   print_help
   exit 1
 fi
 
-if [[ ! -v scope ]]; then
+if [[ -z "${scope-}" ]]; then
   echo_stderr "--scope not defined"
   print_help
   exit 1
@@ -332,3 +332,5 @@ fi
 ################################
 echo_stderr "Saving project token"
 add_token_to_json_file "${project_name}" "${scope}" "${project_access_token}"
+
+echo_stderr "Token saved successfully"
