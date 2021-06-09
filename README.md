@@ -6,6 +6,8 @@
   - [Configure ica](#configure-ica)
   - [Logging in to ica](#logging-in-to-ica)
   - [Navigating the cli](#navigating-the-cli)
+  - [Creating a gpg key](#creating-a-gpg-key)
+  - [Installing and initialising pass](#installing-and-initialising-pass)
   - [Creating an api-key](#creating-an-api-key)
   - [Saving your api-key](#saving-your-api-key)
   - [Using this repo](#using-this-repo)
@@ -106,6 +108,32 @@ A project can be configured to allow users of a given workgroup to have 'read-on
 
 A user's privilege in a given project context will be the union of their workgroups privileges for that project.
 
+### Creating a gpg key
+In order to safely store an API-key, we will need to create a gpg key so we can create a pass database.
+
+Please see [this link][gpg_key_tutorial] for a guide to creating a gpg key
+
+Please run 
+```bash
+gpg --list-secret-keys
+```
+
+to confirm your gpg key has been created correctly.  
+
+Note the following output:
+* Your GPG ID (the long hexadecimal string)
+* The word 'ultimate' preceding your name and email address:
+  * If you do NOT see the word utilmate, you will need to update the 'trust' level of your gpg key.  
+
+
+### Installing and initialising pass
+Now you have a trusted gpg key, you can create a password database through [pass][password_store].  
+Install pass with either `brew` MacOS users, or `apt` linux / wsl users.  
+
+Run `pass init <your GPG ID>`
+
+Congrats! You've set up your password database!!
+
 ### Creating an api-key
 
 An api-key is very handy for service users or those of us that do not want to have to log in every day.  
@@ -114,38 +142,35 @@ Currently, we can create 'long-lasting' (three month) tokens by providing an api
 Head over to our [landing page][ica_landing_page].   
 In the top right corner click on your name/ID and select 'Manage API Keys' from your menu.
 
-Create an api-key for your workgroup context (say development).  
+Deselect all boxes and create your api key (a global api key).  
 Do NOT close the browser until reading the next section
 
 ### Saving your api-key
 
 > Ideally one would create one api-key per workgroup, unfortunately scopes of api-keys aren't 
 > respected by the token creation and are as stated above, will be a union of all of a user's workgroups 
-> privileges for a given project. We are hoping this changes in a future release and are still setting up accordingly.
+> privileges for a given project. We are hoping this changes in a future release but for simplicity will just use one
+> api-key for all projects for now
 
 
 Use [pass][password_store] to store your api-keys under the following hierarchy -> this needs to be done in order to 
 use the 'tokens-management' section below.  
 
-> If you're unfamiliar with pass, please see [this tutorial][pass_tutorial] before continuing
-
 ```shell
-pass add "/ica/api-keys/<workgroup>"
+pass add "/ica/api-keys/default-api-key"
 ```
 
-To test your api-key saving ability we will try the following code:
+Then paste in the api-key token as the password value.  
+
+To test your api-key saving ability we will try the following code (you will need to be logged in to ica for this test):
 
 ```shell
-ica tokens create --project-name "development" --api-key "$(pass "/ica/api-keys/development")"
+ica tokens create --project-name "development" --api-key "$(pass "/ica/api-keys/default-api-key")"
 ```
 
 If a whole bunch of random letters and numbers came up on your terminal, congrats! You can move on to the next section.
 
 :warning:  
-You must also save a 'personal' api-key (by checking all workgroup contexts) under `/ica/api-keys/default-api-key`.  
-While the scripts below are based off a 1:1 mapping between workgroups and projects, there will be some projects that
-do not have an associated workgroup. Since for this ICA release, token creation doesn't depend on the scope on the api-key
-we can fall back on this api-key (default-api-key) in the event there is no set workgroup for a given project.     
 > Please do NOT select an api-key created prior to Jan 30 2021.    
 > Please create a new api key if you do not have an existing api-key created after said date.  
 
@@ -170,7 +195,6 @@ This section entails:
    * Retrieves api-key from pass db
    * Requires project name and scope as input
    * Writes token to `~/.ica-ica-lazy/tokens/tokens.json`
-   * 
 2. `ica-context-switcher`
    * Change contexts by updating the `ICA_ACCESS_TOKEN` env var to that of your project
    * Does NOT require login
