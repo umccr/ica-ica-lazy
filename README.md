@@ -197,6 +197,7 @@ This section entails:
    * Writes token to `~/.ica-ica-lazy/tokens/tokens.json`
 2. `ica-context-switcher`
    * Change contexts by updating the `ICA_ACCESS_TOKEN` env var to that of your project
+   * Prerequisite to all of the by all of the `gds-*` commands  
    * Does NOT require login
    
 ### ica-add-access-token
@@ -225,7 +226,9 @@ One would expect this to return your personal api key.*
 > Autocompletion: :white_check_mark:
 
 Update the `ICA_ACCESS_TOKEN` env var in your current console window with that of a stored token under
-`~/.ica-ica-lazy/tokens/tokens.json`.  You **MUST** have first added the token to the secret file with `ica-add-access-token` script.  
+`~/.ica-ica-lazy/tokens/tokens.json`. 
+
+You **MUST** have first added the token to the secret file with `ica-add-access-token` script.  
 
 **Options:**
   * --project-name: The name of your project
@@ -259,7 +262,8 @@ Run ls on a GDS file system as if it were your local system.
 
 **Environment vars:**
   * ICA_BASE_URL
-  * ICA_ACCESS_TOKEN
+  * ICA_ACCESS_TOKEN  
+    * *You will need to first run `ica-context-switcher` to get this variable into your environment*
 
  
 ### `gds-view`
@@ -280,7 +284,9 @@ visualise the file.
 
 **Environment vars:**
   * ICA_BASE_URL
-  * ICA_ACCESS_TOKEN
+  * ICA_ACCESS_TOKEN  
+    * *You will need to first run `ica-context-switcher` to get this variable into your environment*
+
 
 ## Data sharing scripts
 
@@ -309,7 +315,9 @@ in a given gds folder.  This function requires admin privileges in the source pr
 
 **Environment vars:**
   * ICA_BASE_URL
-  * ICA_ACCESS_TOKEN
+  * ICA_ACCESS_TOKEN  
+    * *You will need to first run `ica-context-switcher` to get this variable into your environment*
+
 
 **Extra info:**
 
@@ -344,7 +352,8 @@ This function requires admin privileges in the destination project.
 
 **Environment vars:**
   * ICA_BASE_URL
-  * ICA_ACCESS_TOKEN
+  * ICA_ACCESS_TOKEN  
+    * *You will need to first run `ica-context-switcher` to get this variable into your environment*
 
 ## VIP - (Advanced scripts) :construction:
 > auto-completion: :construction:
