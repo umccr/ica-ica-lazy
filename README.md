@@ -371,8 +371,16 @@ This section entails:
 
 1. Illumination
 2. Work in progress...
+    * Friendly workflow launcher :construction:
+      * Prompts user at each step
+    * Token expiry warning :construction:
+      * Throws warning when user switches to a token nearing expiry.
+      * Provides option to update 
+    * Workflow only scope :construction:
+      * Scope with no data-access, token can only read/write workflows 
+        and workflow versions
 
-### Running Illumination
+### `ica-illumination`
 > auto-completion: :white_check_mark:
 
 Launch [illumination][illumination] in a given project context.  
