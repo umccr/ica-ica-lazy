@@ -326,7 +326,7 @@ in a given gds folder.  This function requires admin privileges in the source pr
   * ICA_BASE_URL
   * ICA_ACCESS_TOKEN  
     * *You will need to first run `ica-context-switcher` to get this variable into your environment*
-
+    
 
 **Extra info:**
 
@@ -342,7 +342,10 @@ in a given gds folder.  This function requires admin privileges in the source pr
    * Unlike rsync, trailing slashes on the `--gds-path` and `--download-path` do not matter. One can assume that
      a trailing slash exists on both parameters. This means that the contents inside the `--gds-path` parameter are
      downloaded to the contents inside `--download-path`
-
+ 
+   * Despite this command being a 'download' command, you will need an 'admin' token for this command.  
+      * aws s3 sync requires the PutObject policy on the s3 side, regardless of the direction of the sync.  
+    
 ### `gds-sync-upload`
 > auto-completion: :white_check_mark:
 
@@ -363,6 +366,9 @@ This function requires admin privileges in the destination project.
   * ICA_BASE_URL
   * ICA_ACCESS_TOKEN  
     * *You will need to first run `ica-context-switcher` to get this variable into your environment*
+    
+**Extras:**
+> See extras in `gds-sync-download`
 
 ## VIP - (Advanced scripts) :construction:
 > auto-completion: :construction:
@@ -384,7 +390,7 @@ This section entails:
 > auto-completion: :white_check_mark:
 
 Launch [illumination][illumination] in a given project context.  
-This will require you to have added the 'read-only' token to a given project.  
+This will require you to have added the 'read-only' token to a given project with `ica-add-access-token`.  
 
 **Options:**
   * --project-name
@@ -400,5 +406,4 @@ This will require you to have added the 'read-only' token to a given project.
 [ica_landing_page]: https://umccr.login.illumina.com/#/home
 [password_store]: https://www.passwordstore.org/
 [illumination]: https://github.com/umccr/illumination
-
-[pass_tutorial]: https://droidrant.com/notes-pass-unix-password-manager/
+[gpg_key_tutorial]: https://docs.github.com/en/github/authenticating-to-github/managing-commit-signature-verification/generating-a-new-gpg-key
