@@ -181,7 +181,7 @@ add_token_to_json_file(){
   local project_access_token="$3"
 
   # Get directory
-  mkdir --parents "$(dirname "${TOKEN_FILE_PATH}")"
+  mkdir -p "$(dirname "${TOKEN_FILE_PATH}")"
   chmod 700 "$(dirname "${TOKEN_FILE_PATH}")"
 
   if [[ ! -f "${TOKEN_FILE_PATH}" ]]; then
