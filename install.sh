@@ -129,15 +129,13 @@ if [[ "${user_shell}" == "bash" ]]; then
   fi
 
   # Check _init_completion installation - particularly for macos
-  if ! (bash -ic "type _init_completion 1>/dev/null"); then
+  if ! (bash -lic "type _init_completion 1>/dev/null"); then
     echo_stderr "Could not find the command '_init_completion' which is necessary for auto-completion scripts"
     echo_stderr "If you are running on MacOS, please run the following command:"
-    echo_stderr "brew install bash-completion"
-    echo_stderr "Then add the following lines to your .bashrc"
+    echo_stderr "brew install bash-completion@2"
+    echo_stderr "Then add the following lines to your ~/.bash_profile"
     echo_stderr "#######INIT COMPLETION######"
-    echo_stderr "if [ -f \$(brew --prefix)/etc/bash_completion ]; then"
-    echo_stderr "  . \$(brew --prefix)/etc/bash_completion"
-    echo_stderr "fi"
+    echo_stderr "[[ -r \"\$(brew --prefix)/etc/profile.d/bash_completion.sh\" ]] && . \"\$(brew --prefix)/etc/profile.d/bash_completion.sh\""
     echo_stderr "############################"
     exit 1
   fi
