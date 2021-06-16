@@ -1,0 +1,10 @@
+---
+name: gds-ls
+
+title: list gds files and folders
+
+parameters:
+  - name: gds_path
+    completion:
+      command_string: |-
+        gds-ls "${CURRENT_WORD}"

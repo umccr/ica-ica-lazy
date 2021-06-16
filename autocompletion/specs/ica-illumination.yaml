@@ -1,0 +1,17 @@
+---
+name: ica-context-switcher
+
+title: Switch contexts
+
+options:
+  - name: project-name
+    summary: |
+      Name of the project
+    type: string
+    completion:
+      command_string: |-
+        cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]'
+  - name: port
+    summary: |
+      The port you'd like to expose illumination on
+    type: string

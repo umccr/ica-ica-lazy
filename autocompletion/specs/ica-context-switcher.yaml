@@ -1,0 +1,18 @@
+---
+name: ica-context-switcher
+
+title: Switch contexts
+
+options:
+  - name: project-name
+    summary: |
+      Name of the project
+    type: string
+    completion:
+      command_string: |-
+        cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]'
+  - name: scope
+    summary: |
+      The privilege level you'd like to associate with the token
+    type: string
+    enum: [ admin, read-only ]

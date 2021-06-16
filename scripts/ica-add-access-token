@@ -1,0 +1,336 @@
+#!/usr/bin/env bash
+
+: '
+Set up an access token for a project through cwl-ica
+
+This script takes in the following inputs:
+
+1. A project name
+2. A scope level of read-only or admin
+3. An existing ICA_ACCESS_TOKEN of your personal context, if it does not exist, creates one first
+
+This script performs the following steps:
+
+1. Creates a personal access token if ICA_ACCESS_TOKEN env var is not present
+2. Validates that the project exists using the personal access token
+3. Creates a project access token for the given scope
+4. Adds the project token to the tokens.json file
+
+This script has the following outputs:
+N/A
+'
+
+set -euo pipefail
+
+#########
+# GLOBALS
+#########
+
+DEFAULT_API_KEY_STORE_PATH="/ica/api-keys/default-api-key"
+TOKEN_FILE_PATH="$HOME/.ica-ica-lazy/tokens/tokens.json"
+ADMIN_SCOPE_STRING="BSSH.RUNS.READ,DCS.USAGES.READ,ENS.SUBSCRIPTIONS.MANAGE,GDS.FILES.ARCHIVE,GDS.FILES.CREATE,GDS.FILES.DELETE,GDS.FILES.DOWNLOAD,GDS.FILES.READ,GDS.FILES.UPDATE,GDS.FOLDERS.ARCHIVE,GDS.FOLDERS.CREATE,GDS.FOLDERS.DELETE,GDS.FOLDERS.GRANT,GDS.FOLDERS.READ,GDS.FOLDERS.UPDATE,GDS.VOLUMES.ARCHIVE,GDS.VOLUMES.CREATE,GDS.VOLUMES.DELETE,GDS.VOLUMES.GRANT,GDS.VOLUMES.READ,GDS.VOLUMES.UPDATE,GMS.ANALYSISCONFIGURATIONS.CREATE,GMS.ANALYSISCONFIGURATIONS.GRANT,GMS.ANALYSISCONFIGURATIONS.READ,GMS.ANALYSISDEFINITIONS.CREATE,GMS.ANALYSISDEFINITIONS.GRANT,GMS.ANALYSISDEFINITIONS.READ,GMS.ANALYSISFILES.CREATE,GMS.ANALYSISFILES.GRANT,GMS.ANALYSISFILES.READ,GMS.ANALYSISRUNS.CREATE,GMS.ANALYSISRUNS.GRANT,GMS.ANALYSISRUNS.READ,GMS.ANALYSISVERSIONDEFINITIONS.CREATE,GMS.ANALYSISVERSIONDEFINITIONS.GRANT,GMS.ANALYSISVERSIONDEFINITIONS.READ,GMS.BEADCHIPS.CREATE,GMS.BEADCHIPS.DELETE,GMS.BEADCHIPS.GRANT,GMS.BEADCHIPS.READ,GMS.BEADCHIPS.UPDATE,GMS.MANIFESTS.CREATE,GMS.MANIFESTS.DELETE,GMS.MANIFESTS.GRANT,GMS.MANIFESTS.READ,GMS.MANIFESTS.UPDATE,GMS.PRODUCTS.CREATE,GMS.PRODUCTS.DELETE,GMS.PRODUCTS.GRANT,GMS.PRODUCTS.READ,GMS.PRODUCTS.UPDATE,GMS.RUNS.CREATE,GMS.RUNS.GRANT,GMS.RUNS.READ,GMS.RUNS.UPDATE,GMS.SAMPLES.CREATE,GMS.SAMPLES.GRANT,GMS.SAMPLES.READ,GSS.ANALYSISDATASET.CREATE,GSS.ANALYSISDATASET.GRANT,GSS.ANALYSISDATASET.READ,GSS.ANALYSISDATASET.UPDATE,GSS.ANALYSISDATASETS.CREATE,GSS.ANALYSISDATASETS.DELETE,GSS.ANALYSISDATASETS.GRANT,GSS.ANALYSISDATASETS.READ,GSS.ANALYSISDATASETS.UPDATE,GSS.ANALYSISDATASETTYPE.CREATE,GSS.ANALYSISDATASETTYPE.GRANT,GSS.ANALYSISDATASETTYPE.READ,GSS.ANALYSISDATASETTYPE.UPDATE,GSS.ANALYSISDATASETTYPES.CREATE,GSS.ANALYSISDATASETTYPES.GRANT,GSS.ANALYSISDATASETTYPES.READ,GSS.ANALYSISDATASETTYPES.UPDATE,GSS.ANALYSISDEFINITIONS.CREATE,GSS.ANALYSISDEFINITIONS.DELETE,GSS.ANALYSISDEFINITIONS.GRANT,GSS.ANALYSISDEFINITIONS.READ,GSS.ANALYSISDEFINITIONS.UPDATE,GSS.ANALYSISRUNS.CREATE,GSS.ANALYSISRUNS.DELETE,GSS.ANALYSISRUNS.GRANT,GSS.ANALYSISRUNS.READ,GSS.ANALYSISRUNS.UPDATE,GSS.ANALYSISVERSIONS.CREATE,GSS.ANALYSISVERSIONS.DELETE,GSS.ANALYSISVERSIONS.GRANT,GSS.ANALYSISVERSIONS.READ,GSS.ANALYSISVERSIONS.UPDATE,GSS.GENOMES.CREATE,GSS.GENOMES.GRANT,GSS.GENOMES.READ,GSS.GENOMES.UPDATE,GSS.INDEXADAPTERKITS.CREATE,GSS.INDEXADAPTERKITS.DELETE,GSS.INDEXADAPTERKITS.GRANT,GSS.INDEXADAPTERKITS.READ,GSS.INDEXADAPTERKITS.UPDATE,GSS.LI,GSS.LIBRARIES.CREATE,GSS.LIBRARIES.DELETE,GSS.LIBRARIES.GRANT,GSS.LIBRARIES.READ,GSS.LIBRARIES.UPDATE,GSS.LIBRARYPOOLS.CREATE,GSS.LIBRARYPOOLS.DELETE,GSS.LIBRARYPOOLS.GRANT,GSS.LIBRARYPOOLS.READ,GSS.LIBRARYPOOLS.UPDATE,GSS.LIBRARYPREPKITS.CREATE,GSS.LIBRARYPREPKITS.DELETE,GSS.LIBRARYPREPKITS.GRANT,GSS.LIBRARYPREPKITS.READ,GSS.LIBRARYPREPKITS.UPDATE,GSS.SAMPLES.CREATE,GSS.SAMPLES.DELETE,GSS.SAMPLES.GRANT,GSS.SAMPLES.READ,GSS.SAMPLES.UPDATE,GSS.SEQUENCINGRUNS.CREATE,GSS.SEQUENCINGRUNS.DELETE,GSS.SEQUENCINGRUNS.GRANT,GSS.SEQUENCINGRUNS.READ,GSS.SEQUENCINGRUNS.UPDATE,IMS.ASSETS.READ,IMS.ASSETVERSIONS.READ,IMS.INSTRUMENTS.CREATE,IMS.INSTRUMENTS.DELETE,IMS.INSTRUMENTS.GRANT,IMS.INSTRUMENTS.READ,IMS.INSTRUMENTS.UPDATE,TES.RUNS.CREATE,TES.RUNS.DELETE,TES.RUNS.GRANT,TES.RUNS.READ,TES.RUNS.UPDATE,TES.TASKS.CREATE,TES.TASKS.DELETE,TES.TASKS.GRANT,TES.TASKS.READ,TES.TASKS.UPDATE,TES.VERSIONS.CREATE,TES.VERSIONS.DELETE,TES.VERSIONS.GRANT,TES.VERSIONS.READ,TES.VERSIONS.UPDATE,WES.RUNS.CREATE,WES.RUNS.DELETE,WES.RUNS.GRANT,WES.RUNS.READ,WES.RUNS.UPDATE,WES.SIGNALS.CREATE,WES.SIGNALS.DELETE,WES.SIGNALS.GRANT,WES.SIGNALS.READ,WES.SIGNALS.UPDATE,WES.VERSIONS.CREATE,WES.VERSIONS.DELETE,WES.VERSIONS.GRANT,WES.VERSIONS.READ,WES.VERSIONS.UPDATE,WES.WORKFLOWS.CREATE,WES.WORKFLOWS.DELETE,WES.WORKFLOWS.GRANT,WES.WORKFLOWS.READ,WES.WORKFLOWS.UPDATE"
+READ_ONLY_SCOPE_STRING="GMS.ANALYSISCONFIGURATIONS.READ,TES.TASKS.READ,GDS.FOLDERS.READ,GSS.SAMPLES.READ,WES.SIGNALS.READ,TES.RUNS.READ,GDS.VOLUMES.READ,GSS.SEQUENCINGRUNS.READ,GMS.ANALYSISFILES.READ,WES.VERSIONS.READ,BSSH.RUNS.READ,GSS.ANALYSISDEFINITIONS.READ,GMS.MANIFESTS.READ,GDS.FILES.DOWNLOAD,GSS.LIBRARYPREPKITS.READ,GSS.ANALYSISVERSIONS.READ,GMS.ANALYSISRUNS.READ,GMS.SAMPLES.READ,GSS.LIBRARYPOOLS.READ,ENS.SUBSCRIPTIONS.MANAGE,GSS.GENOMES.READ,TES.VERSIONS.READ,GSS.ANALYSISDATASETS.READ,WES.WORKFLOWS.READ,GMS.ANALYSISVERSIONDEFINITIONS.READ,GMS.BEADCHIPS.READ,GSS.INDEXADAPTERKITS.READ,GDS.FOLDERS.GRANT,GMS.PRODUCTS.READ,DCS.USAGES.READ,WES.RUNS.READ,GDS.FILES.READ,GMS.ANALYSISDEFINITIONS.READ,GSS.LIBRARIES.READ,GMS.RUNS.READ,IMS.INSTRUMENTS.READ"
+
+###########
+# Functions
+###########
+
+# Standard functions
+echo_stderr(){
+  : '
+  Write to stderr
+  '
+  echo "$@" 1>&2
+}
+
+check_binaries(){
+  : '
+  Make sure that curl / jq / python3 pass / binary exists in PATH
+  '
+  if ! (type curl jq pass python3 1>/dev/null); then
+    return 1
+  fi
+}
+
+check_env_vars(){
+  : '
+  Make sure that ICA BASE URL is set
+  '
+  if [[ -z "${ICA_BASE_URL-}" ]]; then
+    echo_stderr "Env var ICA_BASE_URL is not set"
+    return 1
+  fi
+}
+
+# Get scope string based on different use cases
+get_scope_string(){
+  : '
+  Return the scopes based on the users desired access level
+  '
+  local scope_level="$1"
+  local scope
+
+  if [[ "${scope_level}" == "read-only" ]]; then
+    echo "${READ_ONLY_SCOPE_STRING}"
+  elif [[ "${scope_level}" == "admin" ]]; then
+    echo "${ADMIN_SCOPE_STRING}"
+  fi
+}
+
+# Personal access token functions
+get_default_api_key(){
+  : '
+  Gets the api key from /ica/api-keys/default-api-key in users password store
+  '
+  pass "${DEFAULT_API_KEY_STORE_PATH}" 2>/dev/null
+}
+
+create_personal_access_token(){
+  : '
+  Create a personal access token
+  '
+  local token_obj
+
+  token_obj="$(curl \
+                 --silent \
+                 --location \
+                 --fail \
+                 --request POST \
+                 --url "${ICA_BASE_URL}/v1/tokens" \
+                 --header "Accept: application/json" \
+                 --header "X-API-Key: $(get_default_api_key)" \
+                 --header "Content-Length: 0")"
+
+  # Return the access token attribute
+  jq --raw-output \
+    '.access_token' \
+    <<< "${token_obj}"
+}
+
+get_project_id_from_project_name(){
+  : '
+  Checks that the project exists from the personal context
+  and returns the project id
+  '
+
+  local project_name="$1"
+  local personal_access_token="$2"
+  local projects_list_obj
+
+  # List project objects
+  projects_list_obj="$(curl \
+                         --silent \
+                         --location \
+                         --fail \
+                         --request GET \
+                         --url "${ICA_BASE_URL}/v1/projects" \
+                         --header "Authorization: Bearer ${personal_access_token}")"
+
+  # Although we don't actually use the project id
+  project_id="$(jq --raw-output \
+                   --arg project_name "${project_name}" \
+                   '.items[] | select(.name==$project_name) | .id' \
+                   <<< "${projects_list_obj}")"
+
+  # Get the project id from the project name
+  if [[ -z "${project_id}" || "${project_id}" == "null" ]]; then
+    echo_stderr "Could not get the project id from the project name \"${project_name}\""
+    return 1
+  fi
+
+  # Return the project id
+  echo "${project_id}"
+}
+
+create_project_token(){
+  : '
+  Creates an ica access token for a given project
+  '
+  local project_id="$1"
+  local scope="$2"
+  local personal_access_token="$3"
+
+  local token_obj
+
+  token_obj="$(curl \
+                 --silent \
+                 --location \
+                 --fail \
+                 --request POST \
+                 --url "${ICA_BASE_URL}/v1/tokens" \
+                 --header "Accept: application/json" \
+                 --header "Content-Length: 0" \
+                 --header "X-API-Key: $(get_default_api_key)" \
+                 --header "Authorization: Bearer ${personal_access_token}" \
+                 --get \
+                 --data "cid=${project_id}" \
+                 --data "scopes=$(get_scope_string "${scope}")")"
+
+  # Return the access token attribute
+  jq --raw-output \
+    '.access_token' \
+    <<< "${token_obj}"
+}
+
+add_token_to_json_file(){
+  : '
+  Adds the token to the json file
+  '
+  local project_name="$1"
+  local scope="$2"
+  local project_access_token="$3"
+
+  # Get directory
+  mkdir -p "$(dirname "${TOKEN_FILE_PATH}")"
+  chmod 700 "$(dirname "${TOKEN_FILE_PATH}")"
+
+  if [[ ! -f "${TOKEN_FILE_PATH}" ]]; then
+    in_json="{}"
+  else
+    in_json="$(cat "${TOKEN_FILE_PATH}")"
+  fi
+
+  # Import file and add to list
+  tokens_obj="$(jq \
+                  --raw-output \
+                  --arg project_name "${project_name}" \
+                  --arg scope "${scope}" \
+                  --arg project_access_token "${project_access_token}" \
+                  '.[$project_name][$scope] = $project_access_token' <<< "${in_json}")"
+
+  # Write token object back out to file
+  echo "${tokens_obj}" > "${TOKEN_FILE_PATH}"
+
+  # Change permissions on file
+  chmod 600 "${TOKEN_FILE_PATH}"
+}
+
+print_help(){
+  echo "
+  Usage ica-add-access-token (--project-name <project-name>) (--scope read-only|admin)
+
+  Description:
+    Creates and adds an access token to a restricted file in your home directory.
+    Use --scope to specify the privilege level you would like for each project token.
+
+  Options:
+    -p / --project-name: Name of project context
+    -s / --scope: Scope level
+
+  Requirements:
+    * curl
+    * jq
+    * python3
+    * pass
+
+  Environment variables:
+    * ICA_BASE_URL
+  "
+}
+
+######
+# ARGS
+######
+
+# Get args from the command line
+
+# Get args from command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -p | --project-name)
+      project_name="$2"
+      shift 1
+      ;;
+    -s | --scope)
+      scope="$2"
+      shift 1
+      ;;
+    -h | --help)
+      print_help
+      exit 0
+      ;;
+  esac
+  shift 1
+done
+
+# Check args
+if [[ -z "${project_name-}" ]]; then
+  echo_stderr "--project-name not defined"
+  print_help
+  exit 1
+fi
+
+if [[ -z "${scope-}" ]]; then
+  echo_stderr "--scope not defined"
+  print_help
+  exit 1
+elif [[ "${scope}" != "admin" && "${scope}" != "read-only" ]]; then
+  echo_stderr "--scope must be one of admin or read-only"
+  print_help
+  exit 1
+fi
+
+########
+# CHECKS
+#######
+
+# Check available binaries exist
+if ! check_binaries; then
+  echo_stderr "Please make sure binaries curl, jq and python3 are all available on your PATH variable"
+  print_help
+  exit 1
+fi
+
+# Check env vars exist
+if ! check_env_vars; then
+  echo_stderr "Please make sure the ICA_BASE_URL is set"
+  print_help
+  exit 1
+fi
+
+# Check api key
+if ! get_default_api_key >/dev/null; then
+  echo_stderr "Please make sure you have stored your personal api key at \"${DEFAULT_API_KEY_STORE_PATH}\""
+  exit 1
+fi
+
+#####################
+# CREATE PERSONAL PAT
+#####################
+echo_stderr "Creating a personal access token"
+personal_access_token="$(create_personal_access_token)"
+# Check personal token
+if [[ -z "${personal_access_token}" || "${personal_access_token}" == "null" ]]; then
+  echo_stderr "Could not create a personal access token"
+  exit 1
+fi
+
+################
+# GET PROJECT ID
+################
+echo_stderr "Getting project id from project name"
+project_id="$(get_project_id_from_project_name "${project_name}" "${personal_access_token}")"
+# Check project id
+if [[ -z "${project_id}" || "${project_id}" == "null" ]]; then
+  echo_stderr "Could not get project id from project name"
+  exit 1
+fi
+
+######################
+# CREATE PROJECT TOKEN
+######################
+echo_stderr "Creating project token"
+project_access_token="$(create_project_token "${project_id}" "${scope}" "${personal_access_token}")"
+# Check project token
+if [[ -z "${project_access_token}" || "${project_access_token}" == "null" ]]; then
+  echo_stderr "Could not create a project access token"
+  exit 1
+fi
+
+################################
+# ADD PROJECT TOKEN TO FILE PATH
+################################
+echo_stderr "Saving project token"
+add_token_to_json_file "${project_name}" "${scope}" "${project_access_token}"
+
+echo_stderr "Token saved successfully"

@@ -1,0 +1,13 @@
+---
+name: gds-view
+
+title: View a file of the gds
+
+options:
+  - name: gds-path
+    type: string
+    summary: |
+      The gds folder path
+    completion:
+      command_string: |-
+        gds-ls "${CURRENT_WORD}"

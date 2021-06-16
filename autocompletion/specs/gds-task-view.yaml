@@ -1,0 +1,16 @@
+---
+name: gds-task-view
+
+title: View a task of gds
+
+options:
+  - name: task-run-id
+    summary: |
+      Path to gds file
+    type: string
+  - name: stdout
+    summary: |
+      Shows the task stdout
+  - name: stderr
+    summary: |
+      Shows the task stderr

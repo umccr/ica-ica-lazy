@@ -1,6 +1,27 @@
-# ICA-ICA-Lazy
+# ICA-ICA-Lazy <!-- omit in toc -->
 
-TOC # TODO
+- [Vanilla (Getting started)](#vanilla-getting-started)
+  - [Downloading the ica binary](#downloading-the-ica-binary)
+  - [Setting up the ica config](#setting-up-the-ica-config)
+  - [Configure ica](#configure-ica)
+  - [Logging in to ica](#logging-in-to-ica)
+  - [Navigating the cli](#navigating-the-cli)
+  - [Creating a gpg key](#creating-a-gpg-key)
+  - [Installing and initialising pass](#installing-and-initialising-pass)
+  - [Creating an api-key](#creating-an-api-key)
+  - [Saving your api-key](#saving-your-api-key)
+  - [Using this repo](#using-this-repo)
+- [Tokens management](#tokens-management)
+  - [ica-add-access-token](#ica-add-access-token)
+  - [ica-context-switcher](#ica-context-switcher)
+- [Folder / file traversal](#folder--file-traversal)
+  - [`gds-ls`](#gds-ls)
+  - [`gds-view`](#gds-view)
+- [Data sharing scripts](#data-sharing-scripts)
+  - [`gds-sync-download`](#gds-sync-download)
+  - [`gds-sync-upload`](#gds-sync-upload)
+- [VIP - (Advanced scripts) :construction:](#vip---advanced-scripts-construction)
+  - [`ica-illumination`](#ica-illumination)
 
 ## Vanilla (Getting started)
 
@@ -19,7 +40,7 @@ You may download the ica binary from [here][ica_binary_download].
 > Please make sure you're logged in with your Illumina account (see top right hand corner).
 > This account is separate to your GSuite account
 
-If you do not have an account with Illumina you can create on [here][illumina_account_creation].
+If you do not have an account with Illumina you can create one [here][illumina_account_creation].
 
 ### Setting up the ica config
 
@@ -27,6 +48,10 @@ Once you have downloaded the binary file, you will need to make sure that you've
 and add it to your path. The following lines may assist you:
 
 ```shell
+# Use wget to download the url
+wget --output-document ica.zip "<presigned_url>"
+# Unzip the download
+unzip ica.zip
 # Make the ica binary executable
 chmod +x "${HOME}/Downloads/ica"
 # Add binary to common bin path
@@ -39,7 +64,7 @@ UMCCR links to ICA via sso (through our GSuite accounts).
 
 Run the configuration subcommand and respond to the prompts:
 
-* `server-url` should be set to `aps.platform.illumina.com`
+* `server-url` should be set to `aps2.platform.illumina.com`
 * `domain` should be set to `umccr`
 * `output-format` either 'table' or 'json'
 
@@ -83,6 +108,32 @@ A project can be configured to allow users of a given workgroup to have 'read-on
 
 A user's privilege in a given project context will be the union of their workgroups privileges for that project.
 
+### Creating a gpg key
+In order to safely store an API-key, we will need to create a gpg key so we can create a pass database.
+
+Please see [this link][gpg_key_tutorial] for a guide to creating a gpg key
+
+Please run 
+```bash
+gpg --list-secret-keys
+```
+
+to confirm your gpg key has been created correctly.  
+
+Note the following output:
+* Your GPG ID (the long hexadecimal string)
+* The word 'ultimate' preceding your name and email address:
+  * If you do NOT see the word utilmate, you will need to update the 'trust' level of your gpg key.  
+
+
+### Installing and initialising pass
+Now you have a trusted gpg key, you can create a password database through [pass][password_store].  
+Install pass with either `brew` MacOS users, or `apt` linux / wsl users.  
+
+Run `pass init <your GPG ID>`
+
+Congrats! You've set up your password database!!
+
 ### Creating an api-key
 
 An api-key is very handy for service users or those of us that do not want to have to log in every day.  
@@ -91,77 +142,112 @@ Currently, we can create 'long-lasting' (three month) tokens by providing an api
 Head over to our [landing page][ica_landing_page].   
 In the top right corner click on your name/ID and select 'Manage API Keys' from your menu.
 
-Create an api-key for your workgroup context (say development).  
+Deselect all boxes and create your api key (a global api key).  
 Do NOT close the browser until reading the next section
 
 ### Saving your api-key
 
 > Ideally one would create one api-key per workgroup, unfortunately scopes of api-keys aren't 
 > respected by the token creation and are as stated above, will be a union of all of a user's workgroups 
-> privileges for a given project. We are hoping this changes in a future release and are still setting up accordingly.
+> privileges for a given project. We are hoping this changes in a future release but for simplicity will just use one
+> api-key for all projects for now
 
 
 Use [pass][password_store] to store your api-keys under the following hierarchy -> this needs to be done in order to 
 use the 'tokens-management' section below.  
 
-> If you're unfamiliar with pass, please see [this tutorial][pass_tutorial] before continuing
-
 ```shell
-pass add "/ica/api-keys/<workgroup>"
+pass add "/ica/api-keys/default-api-key"
 ```
 
-To test your api-key saving ability we will try the following code:
+Then paste in the api-key token as the password.  
+
+To test your pass db works run:  
 
 ```shell
-ica tokens create --project-name "development" --api-key "$(pass "/ica/api-keys/development")"
+pass "/ica/api-keys/default-api-key"
 ```
 
-If a whole bunch of random letters and numbers came up on your terminal, congrats! You can move on to the next section.
+You may be prompted to enter your gpg password.  
 
-:warning:
-You must also save a 'personal' (by checking all workgroup contexts) api-key under `/ica/api-keys/default-api-key`.  
-While the scripts below are based off a 1:1 mapping between workgroups and projects, there will be some projects that
-do not have an associated workgroup. Since for this ICA release, token creation doesn't depend on the scope on the api-key
-we can fall back on this api-key (default-api-key) in the event there is no set workgroup for a given project.   
+To test your token creation ability, we will try the following code (you will need to be logged in to ica for this test):
 
-### Using this repo :construction:
+```shell
+ica tokens create --project-name "development" --api-key "$(pass "/ica/api-keys/default-api-key")"
+```
+
+If a bunch of random letters and numbers came up on your terminal, congrats! You can move on to the next section.
+
+:warning:  
+> Please do NOT use an api-key created prior to Jan 30 2021.    
+> Please create a new api key if you do not have an existing api-key created after said date.  
+
+### Using this repo
 
 Now it's time to set you up with this repo.  
 
-Download the zip file from the [releases page][releases_page] :construction:
+Download the zip file from the [releases page][releases_page]
 Unzip the file and run:
 ```bash
-cd "iil-release-<version>"
+cd "release-<version>"
 bash install.sh
 ```
 
-This will prompt you to add a few lines to your `~/.zshrc` (MacOS users) or `~/.bashrc` (Linux or WSL users)
+This will prompt you to add a few lines to your `~/.zlogin` (MacOS users) or `~/.bash_profile` (Linux or WSL users).  If you are running MacOS,  
+you may be prompted to update your existing shell.  
 
-#### Setup
-
-## Tokens management :construction:
+## Tokens management
 
 This section entails:
 
-1. `ica-add-access-token` :construction:
-   * Adds an access token to `~/.ica-ica-lazy/tokens/tokens.json`
-   * Requires a project name
-1. `ica-refresh-access-token` :construction:
-   * Refreshing an expired token
-   * Set up of the tokens management section
-   * For development, production and other projects
-   * To be an automated process when tokens expire :construction:
-2. `ica-context-switcher` :construction:
+1. `ica-add-access-token`
+   * Retrieves api-key from pass db
+   * Requires project name and scope as input
+   * Writes token to `~/.ica-ica-lazy/tokens/tokens.json`
+2. `ica-context-switcher`
    * Change contexts by updating the `ICA_ACCESS_TOKEN` env var to that of your project
+   * Prerequisite to all of the by all of the `gds-*` commands  
    * Does NOT require login
    
-### ica-refresh-access-token :construction:
+### ica-add-access-token
+> Autocompletion: :white_check_mark:
 
-This command will update your token for a given project under `~/.ica/ica-ica-lazy-access-tokens.json`
+This command will update your token for a given project under `~/.ica-ica-lazy/tokens/tokens.json`.  
+Pleas make sure you've read the [Saving your api key](#saving-your-api-key) section before trying.
+
+*To verify, you've successfully completed said section, please run `pass /ica/api-keys/default-api-key`.  
+One would expect this to return your personal api key.*
+
+**Options:**
+  * --project-name: The name of your project
+  * --scope: Do you want to enter this context with 'admin' or 'read-only' privileges
+
+**Requirements:**
+  * curl
+  * jq
+  * pass
+
+**Environment vars:**
+  * ICA_BASE_URL
 
 
+### ica-context-switcher
+> Autocompletion: :white_check_mark:
 
-## Folder / file traversal :construction:
+Update the `ICA_ACCESS_TOKEN` env var in your current console window with that of a stored token under
+`~/.ica-ica-lazy/tokens/tokens.json`. 
+
+You **MUST** have first added the token to the secret file with `ica-add-access-token` script.  
+
+**Options:**
+  * --project-name: The name of your project
+  * --scope: Do you want to enter this context with 'admin' or 'read-only' privileges
+
+**Requirements**
+  * curl
+  * jq
+
+## Folder / file traversal
 
 This section entails:
 
@@ -172,11 +258,46 @@ This section entails:
 
 ### `gds-ls`
 > auto-completion :white_check_mark:
+
+Run ls on a GDS file system as if it were your local system.  
+
+**Options:**
+  * folder-path: Single positional argument.
+
+**Requirements:**
+  * curl
+  * jq
+  * python3
+
+**Environment vars:**
+  * ICA_BASE_URL
+  * ICA_ACCESS_TOKEN  
+    * *You will need to first run `ica-context-switcher` to get this variable into your environment*
+
  
 ### `gds-view`
-> auto-completion: :construction:
+> auto-completion :white_check_mark:
 
-## Data sharing scripts :construction:
+View a gds file without first needing to download it.  
+Works for gzipped files too.  Uses the links program (through docker) to
+visualise the file.  
+
+**Options:**
+  * --gds-path: Path to the gds file you wish to view.
+
+**Requirements:**
+  * curl
+  * jq
+  * python3
+  * docker
+
+**Environment vars:**
+  * ICA_BASE_URL
+  * ICA_ACCESS_TOKEN  
+    * *You will need to first run `ica-context-switcher` to get this variable into your environment*
+
+
+## Data sharing scripts
 
 This section entails:
 
@@ -184,25 +305,105 @@ This section entails:
    * For syncing a gds folder with a local path
 2. Using `gds-sync-upload`
    * For syncing a local path with a gds folder
+ 
+### `gds-sync-download`
+> auto-completion: :white_check_mark:
 
-### `gds-sync-download` :construction:
-> auto-completion: :construction:
+Sync a gds folder with a local directory using the temporary aws creds
+in a given gds folder.  This function requires admin privileges in the source project.  
 
+**Options:**  
+  * --gds-path:  Path to the gds folder
+  * --download-path:  Path to your local directory
 
-### `gds-sync-upload` :construction:
-> auto-completion: :construction:
+**Requirements:**
+  * curl
+  * jq
+  * python3  
+  * aws
+
+**Environment vars:**
+  * ICA_BASE_URL
+  * ICA_ACCESS_TOKEN  
+    * *You will need to first run `ica-context-switcher` to get this variable into your environment*
+    
+
+**Extra info:**
+
+*  You can also use any of the aws s3 sync parameters to add to the command list, for example:
+   ```
+   gds-sync-download --gds-path gds://volume-name/path-to-folder/ --exclude='*' --include='*.fastq.gz'
+   ```
+   will download only fastq files from that folder.
+           
+   * If you are unsure on what files will be downloaded, use the `--dryrun` parameter. This will inform you of which
+     files will be downloaded to your local file system.
+   
+   * Unlike rsync, trailing slashes on the `--gds-path` and `--download-path` do not matter. One can assume that
+     a trailing slash exists on both parameters. This means that the contents inside the `--gds-path` parameter are
+     downloaded to the contents inside `--download-path`
+ 
+   * Despite this command being a 'download' command, you will need an 'admin' token for this command.  
+      * aws s3 sync requires the PutObject policy on the s3 side, regardless of the direction of the sync.  
+    
+### `gds-sync-upload`
+> auto-completion: :white_check_mark:
+
+Sync a local directory with a gds folder using the temporary aws creds in a given gds folder.  
+This function requires admin privileges in the destination project.  
+
+**Options:**  
+  * --src-path:  Path to your local directory
+  * --gds-path:  Path to the gds folder
+
+**Requirements:**
+  * curl
+  * jq
+  * python3  
+  * aws
+
+**Environment vars:**
+  * ICA_BASE_URL
+  * ICA_ACCESS_TOKEN  
+    * *You will need to first run `ica-context-switcher` to get this variable into your environment*
+    
+**Extras:**
+> See extras in `gds-sync-download`
 
 ## VIP - (Advanced scripts) :construction:
 > auto-completion: :construction:
 
 This section entails:
 
-1. Running [illumination][illumination]
+1. Illumination
+2. Work in progress...
+    * Friendly workflow launcher :construction:
+      * Prompts user at each step
+    * Token expiry warning :construction:
+      * Throws warning when user switches to a token nearing expiry.
+      * Provides option to update 
+    * Workflow only scope :construction:
+      * Scope with no data-access, token can only read/write workflows 
+        and workflow versions
 
+### `ica-illumination`
+> auto-completion: :white_check_mark:
 
+Launch [illumination][illumination] in a given project context.  
+This will require you to have added the 'read-only' token to a given project with `ica-add-access-token`.  
+
+**Options:**
+  * --project-name
+  * --port
+
+**Requirements:**
+  * docker
+  * jq
+
+[releases_page]: https://github.com/umccr/ica-ica-lazy/releases
 [illumina_account_creation]: https://login.illumina.com/platform-services-manager/#/
 [ica_binary_download]: https://sapac.support.illumina.com/downloads/illumina-connected-analytics-cli-v1-0.html
 [ica_landing_page]: https://umccr.login.illumina.com/#/home
 [password_store]: https://www.passwordstore.org/
 [illumination]: https://github.com/umccr/illumination
-[pass_tutorial]: https://droidrant.com/notes-pass-unix-password-manager/
+[gpg_key_tutorial]: https://docs.github.com/en/github/authenticating-to-github/managing-commit-signature-verification/generating-a-new-gpg-key

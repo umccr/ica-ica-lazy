@@ -1,0 +1,17 @@
+---
+name: gds-sync-upload
+
+title: upload files from gds through aws sync
+
+options:
+  - name: src-path
+    summary: |
+      The directory you would like to upload to
+    type: dir
+  - name: gds-path
+    summary: |
+      The gds folder path
+    type: string
+    completion:
+      command_string: |-
+        gds-ls "${CURRENT_WORD}"

@@ -1,0 +1,257 @@
+#!/usr/bin/env bash
+
+: '
+List gds files and folders as one would with ls
+
+This script does the following
+1. Check if access token and base url exist
+2. Prints the list of files and folders
+'
+
+set -euo pipefail
+
+#########
+# GLOBALS
+#########
+
+MAX_PAGE_SIZE=1000
+
+#######
+# SETUP
+#######
+
+if [[ -z "${ICA_BASE_URL-}" ]]; then
+    echo "Need to set var \"ICA_BASE_URL\"" 1>&2
+    exit 1
+fi
+
+if [[ -z "${ICA_ACCESS_TOKEN-}" ]]; then
+    echo "Need to set var \"ICA_ACCESS_TOKEN\"" 1>&2
+    echo "Please first run ica-context-switcher"
+    exit 1
+fi
+
+if [[ -z "${1:-}" ]]; then
+    exit
+fi
+
+########
+# INPUTS
+########
+gds_path="${1:-gds://}"
+
+###########
+# FUNCTIONS
+###########
+
+## Getters
+get_volume_name(){
+  : '
+  Get the volume name from the gds path
+  '
+
+  # Function outputs
+  python3 -c "from urllib.parse import urlparse; print(urlparse(\"${gds_path}\").netloc)"
+}
+
+get_path(){
+  : '
+  Get the path attribute from the gds path
+  '
+
+  # Function outputs
+  python3 -c "from urllib.parse import urlparse; print(urlparse(\"${gds_path}\").path)"
+
+}
+
+get_parent_path(){
+  : '
+  Take the path input as a python lib and then return the parent (with a trailing slash)
+  '
+
+  local gds_path_attr="$1"
+
+  python3 -c "from pathlib import Path; print(str(Path(\"${gds_path_attr}\").parent).rstrip(\"/\") + \"/\")"
+}
+
+## Checkers
+
+check_gds(){
+  : '
+  Sub function, before we continue, make sure that the argument starts with gds://
+  '
+
+  # Local vars
+  local scheme
+
+  scheme="$(python3 -c "from urllib.parse import urlparse; print(urlparse(\"${gds_path}\").scheme)")"
+
+  # Function doesn't output anything, just a non-zero return value if the scheme variable is not gds
+  if [[ ! "${scheme}" == "gds" ]]; then
+    return 1
+  fi
+}
+
+check_volume(){
+  : '
+  Check volume exists
+  '
+
+  local volume_name="$1"
+
+  if ! curl \
+         --silent \
+         --location \
+         --fail \
+         --request GET \
+         --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+         "${ICA_BASE_URL}/v1/volumes/${volume_name}" >/dev/null 2>&1; then
+    return 1
+  fi
+}
+
+check_path_is_folder(){
+  : '
+  Check if the current path is a folder by first listing the folders in the parent path
+  and searching for this folder
+  '
+
+  local volume_name="$1"
+  local gds_path_attr="$2"
+  local data_params=( "--data" "volume.name=${volume_name}"
+                      "--data" "recursive=false"
+                      "--data" "pageSize=${MAX_PAGE_SIZE}" )
+
+  if [[ -n "${gds_path_attr}" && "${gds_path_attr}" != "/" ]]; then
+    data_params+=( "--data" "path=$(get_parent_path "${gds_path_attr}")*" )
+  fi
+
+  if ! folders_obj="$(curl \
+                        --silent \
+                        --location \
+                        --fail \
+                        --request GET \
+                        --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+                        --url "${ICA_BASE_URL}/v1/folders" \
+                        --get \
+                        "${data_params[@]}" 2>/dev/null)"; then
+    return 1
+  fi
+
+  if [[ "$(jq \
+            --raw-output \
+            --arg "gds_path_attr" "${gds_path_attr}" \
+            '.items[] | select ( .path == $gds_path_attr ) | .path' <<< "${folders_obj}")" != "${gds_path_attr}" ]]; then
+      return 1
+  fi
+}
+
+## Printers
+print_volumes(){
+  : '
+  Print list of volumes
+  '
+  volumes_obj="$(curl \
+                   --silent \
+                   --location \
+                   --fail \
+                   --request GET \
+                   --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+                   --url "${ICA_BASE_URL}/v1/volumes" \
+                   --get \
+                   --data "pageSize=${MAX_PAGE_SIZE}" 2>/dev/null)"
+
+    jq --raw-output \
+      '.items[] | "gds://\(.name)"' <<< "${volumes_obj}"
+}
+
+print_files_and_subfolders(){
+  : '
+  list the files and the subfolders of the path that match
+  '
+
+  local volume_name="$1"
+  local gds_path_attr="$2"
+
+  # Get folders and files
+  folders_obj="$(curl \
+                   --silent \
+                   --location \
+                   --fail \
+                   --request GET \
+                   --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+                   --url "${ICA_BASE_URL}/v1/folders" \
+                   --get \
+                   --data "volume.name=${volume_name}" \
+                   --data "recursive=false" \
+                   --data "pageSize=${MAX_PAGE_SIZE}" \
+                   --data "path=${gds_path_attr}*" 2>/dev/null)"
+
+  files_obj="$(curl \
+                 --silent \
+                 --location \
+                 --fail \
+                 --request GET \
+                 --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+                 --url "${ICA_BASE_URL}/v1/files" \
+                 --get \
+                 --data "volume.name=${volume_name}" \
+                 --data "recursive=false" \
+                 --data "pageSize=${MAX_PAGE_SIZE}" \
+                 --data "path=${gds_path_attr}*" 2>/dev/null)"
+
+  # Get jq items
+  folders="$(jq \
+              --raw-output \
+              --arg "volume_name" "${volume_name}" \
+              '.items[] | "gds://\($volume_name)\(.path)"' <<< "${folders_obj}")"
+  files="$(jq \
+            --raw-output \
+            --arg "volume_name" "${volume_name}" \
+            '.items[] | "gds://\($volume_name)\(.path)"' <<< "${files_obj}")"
+
+  # Write out files and folders but sort on print
+  if [[ -z "${files}" && -z "${folders}" ]]; then
+    echo ""
+  elif [[ -z "${files}" ]]; then
+    echo "${folders}" | sort -f
+  elif [[ -z "${folders}" ]]; then
+    echo "${files}" | sort -f
+  else
+    printf "%s\n%s" "${files}" "${folders}" | sort -f
+  fi
+}
+
+# Start of workflow
+
+# Check prompt starts with gds
+if ! check_gds; then
+  : '
+  Nothing to return - we just echo "gds://"
+  '
+  echo "gds://"
+fi
+
+# Get the volume
+volume_name="$(get_volume_name)"
+
+if [[ "${volume_name}" == "" ]]; then
+  print_volumes
+  exit
+fi
+
+# Check volume exists - if not print all volumes
+if ! check_volume "${volume_name}"; then
+  print_volumes
+  exit
+fi
+
+# Get the path
+gds_path_attr="$(get_path)"
+
+# Print from
+if ! check_path_is_folder "${volume_name}" "${gds_path_attr}"; then
+  print_files_and_subfolders "${volume_name}" "$(get_parent_path "${gds_path_attr}")"
+else
+  print_files_and_subfolders "${volume_name}" "${gds_path_attr}"
+fi
