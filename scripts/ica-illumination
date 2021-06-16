@@ -118,6 +118,11 @@ fi
 # Get access token
 project_access_token="$(get_access_token "${project_name}" "${DEFAULT_SCOPE}" "${TOKENS_PATH}")"
 
+if [[ -z "${project_access_token}" ]]; then
+  echo_stderr "Could not get access token for project \"${project_name}\" with scope \"${DEFAULT_SCOPE}\""
+  echo_stderr "Please first run 'ica-add-access-token --project-name \"${project_name}\" --scope \"${DEFAULT_SCOPE}\""
+fi
+
 # Run illumination
 docker_id="$(run_illumination_docker "${project_access_token}" "${port}")"
 
@@ -129,6 +134,6 @@ fi
 echo_stderr "Docker launched Illumination successfully"
 echo_stderr "Please head to localhost://${port} on your preferred browser"
 
-docker_name="$(docker container inspect "${docker_id}" | jq '.[0].Name' | sed '%\/%%')"
+docker_name="$(docker container inspect "${docker_id}" | jq --raw-output '.[0].Name' | sed 's%^\/%%')"
 
 echo_stderr "To stop the container, please run 'docker kill \"${docker_name}\"'"
