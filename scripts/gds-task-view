@@ -57,8 +57,8 @@ get_task_log_file(){
 
 # Initialise variables
 task_id=""
-base_url="${ICA_BASE_URL}"
-access_token="${ICA_ACCESS_TOKEN}"
+base_url="${ICA_BASE_URL-}"
+access_token="${ICA_ACCESS_TOKEN-}"
 print_stdout=0
 print_stderr=0
 log_gds_path=""

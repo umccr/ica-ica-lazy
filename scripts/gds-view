@@ -29,8 +29,8 @@ print_help(){
 
 # Inputs
 gds_path=""
-access_token="${ICA_ACCESS_TOKEN}"
-base_url="${ICA_BASE_URL}"
+access_token="${ICA_ACCESS_TOKEN-}"
+base_url="${ICA_BASE_URL-}"
 
 while [ $# -gt 0 ]; do
     case "$1" in

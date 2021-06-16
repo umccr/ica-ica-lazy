@@ -211,8 +211,8 @@ strip_path_from_base_url() {
 aws_s3_sync_args=()
 gds_path=""
 download_path="$PWD"
-base_url="${ICA_BASE_URL}"
-access_token="${ICA_ACCESS_TOKEN}"
+base_url="${ICA_BASE_URL-}"
+access_token="${ICA_ACCESS_TOKEN-}"
 
 # Check available binaries exist
 if ! binaries_check; then

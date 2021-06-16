@@ -20,13 +20,14 @@ MAX_PAGE_SIZE=1000
 # SETUP
 #######
 
-if [[ -z "${ICA_BASE_URL}" ]]; then
+if [[ -z "${ICA_BASE_URL-}" ]]; then
     echo "Need to set var \"ICA_BASE_URL\"" 1>&2
     exit 1
 fi
 
-if [[ -z "${ICA_ACCESS_TOKEN}" ]]; then
+if [[ -z "${ICA_ACCESS_TOKEN-}" ]]; then
     echo "Need to set var \"ICA_ACCESS_TOKEN\"" 1>&2
+    echo "Please first run ica-context-switcher"
     exit 1
 fi
 
