@@ -176,7 +176,7 @@ To test your token creation ability, we will try the following code (you will ne
 ica tokens create --project-name "development" --api-key "$(pass "/ica/api-keys/default-api-key")"
 ```
 
-If a whole bunch of random letters and numbers came up on your terminal, congrats! You can move on to the next section.
+If a bunch of random letters and numbers came up on your terminal, congrats! You can move on to the next section.
 
 :warning:  
 > Please do NOT use an api-key created prior to Jan 30 2021.    
@@ -193,7 +193,7 @@ cd "release-<version>"
 bash install.sh
 ```
 
-This will prompt you to add a few lines to your `~/.zshrc` (MacOS users) or `~/.bashrc` (Linux or WSL users).  If you are running MacOS,  
+This will prompt you to add a few lines to your `~/.zlogin` (MacOS users) or `~/.bash_profile` (Linux or WSL users).  If you are running MacOS,  
 you may be prompted to update your existing shell.  
 
 ## Tokens management
