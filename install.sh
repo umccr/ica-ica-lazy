@@ -120,21 +120,26 @@ fi
 
 user_shell="$(get_user_shell)"
 
-# Check bash help
+# Check bash version
 if [[ "${user_shell}" == "bash" ]]; then
-  # Check bash version
-  if [[ "$( echo "${BASH_VERSION}" | cut -d'.' -f1)" -le "4" ]]; then
-    echo_stderr "Please upgrade to bash version 4 or higher, if you are running MacOS then please run 'brew install bash' then re-run the installation scripts"
+  echo_stderr "Checking bash version"
+  if [[ "$( "${SHELL}" -lic "echo \"\${BASH_VERSION}\" 2>/dev/null" | cut -d'.' -f1)" -le "4" ]]; then
+    echo_stderr "Please upgrade to bash version 4 or higher, if you are running MacOS then please run the following commands"
+    echo_stderr "brew install bash"
+    echo_stderr "sudo bash -c \"echo /usr/local/bin/bash >> /etc/shells\""
+    echo_stderr "chsh -s /usr/local/bin/bash"
     exit 1
   fi
+fi
 
-  # Check _init_completion installation - particularly for macos
-  if ! (bash -lic "type _init_completion 1>/dev/null"); then
+# Checking bash-completion is installed (for bash users only)
+if [[ "${user_shell}" == "bash" ]]; then
+  if ! ("${SHELL}" -lic "type _init_completion 1>/dev/null"); then
     echo_stderr "Could not find the command '_init_completion' which is necessary for auto-completion scripts"
     echo_stderr "If you are running on MacOS, please run the following command:"
-    echo_stderr "brew install bash-completion@2"
-    echo_stderr "Then add the following lines to your ~/.bash_profile"
-    echo_stderr "#######INIT COMPLETION######"
+    echo_stderr "brew install bash-completion@2 --HEAD"
+    echo_stderr "Then add the following lines to ${HOME}/.bash_profile"
+    echo_stderr "#######BASH COMPLETION######"
     echo_stderr "[[ -r \"\$(brew --prefix)/etc/profile.d/bash_completion.sh\" ]] && . \"\$(brew --prefix)/etc/profile.d/bash_completion.sh\""
     echo_stderr "############################"
     exit 1
@@ -162,6 +167,7 @@ mkdir -p "${main_dir}"
 rsync --delete --archive \
   "$(get_this_path)/scripts/" "${main_dir}/scripts/"
 
+chmod +x "${main_dir}/scripts/"*
 
 ################
 # COPY FUNCTIONS
@@ -178,9 +184,16 @@ rsync --delete --archive \
 #################
 # PRINT USER HELP
 #################
+if [[ "${user_shell}" == "bash" ]]; then
+  rc_profile="${HOME}/.bash_profile"
+elif [[ "${user_shell}" == "zsh" ]]; then
+  rc_profile="${HOME}/.zlogin"
+else
+  rc_profile="${HOME}/.${user_shell}rc"
+fi
 
 echo_stderr "INSTALLATION COMPLETE!"
-echo_stderr "To start using the lazy scripts, add the following lines to your ~/.${user_shell}rc"
+echo_stderr "To start using the lazy scripts, add the following lines to ${rc_profile}"
 echo_stderr "######ICA-ICA-LAZY######"
 echo_stderr "export ICA_BASE_URL=\"https://aps2.platform.illumina.com\""
 echo_stderr "# Add scripts to PATH var"
@@ -199,4 +212,4 @@ elif [[ "${user_shell}" == "zsh" ]]; then
   echo_stderr "compinit"
 fi
 
-echo_stderr "###################"
+echo_stderr "########################"
