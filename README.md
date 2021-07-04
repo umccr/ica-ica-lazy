@@ -123,7 +123,7 @@ to confirm your gpg key has been created correctly.
 Note the following output:
 * Your GPG ID (the long hexadecimal string)
 * The word 'ultimate' preceding your name and email address:
-  * If you do NOT see the word utilmate, you will need to update the 'trust' level of your gpg key.  
+  * If you do NOT see the word ultimate, you will need to update the 'trust' level of your gpg key.  
 
 
 ### Installing and initialising pass
