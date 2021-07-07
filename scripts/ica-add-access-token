@@ -255,17 +255,17 @@ done
 
 # Check args
 if [[ -z "${project_name-}" ]]; then
-  echo_stderr "--project-name not defined"
+  echo_stderr "Error: --project-name not defined"
   print_help
   exit 1
 fi
 
 if [[ -z "${scope-}" ]]; then
-  echo_stderr "--scope not defined"
+  echo_stderr "Error: --scope not defined"
   print_help
   exit 1
 elif [[ "${scope}" != "admin" && "${scope}" != "read-only" ]]; then
-  echo_stderr "--scope must be one of admin or read-only"
+  echo_stderr "Error: --scope must be one of admin or read-only"
   print_help
   exit 1
 fi
@@ -276,21 +276,21 @@ fi
 
 # Check available binaries exist
 if ! check_binaries; then
-  echo_stderr "Please make sure binaries curl, jq and python3 are all available on your PATH variable"
+  echo_stderr "Error: Please make sure binaries curl, jq and python3 are all available on your PATH variable"
   print_help
   exit 1
 fi
 
 # Check env vars exist
 if ! check_env_vars; then
-  echo_stderr "Please make sure the ICA_BASE_URL is set"
+  echo_stderr "Error: Please make sure the ICA_BASE_URL is set"
   print_help
   exit 1
 fi
 
 # Check api key
 if ! get_default_api_key >/dev/null; then
-  echo_stderr "Please make sure you have stored your personal api key at \"${DEFAULT_API_KEY_STORE_PATH}\""
+  echo_stderr "Error: Please make sure you have stored your personal api key at \"${DEFAULT_API_KEY_STORE_PATH}\""
   exit 1
 fi
 
@@ -301,7 +301,7 @@ echo_stderr "Creating a personal access token"
 personal_access_token="$(create_personal_access_token)"
 # Check personal token
 if [[ -z "${personal_access_token}" || "${personal_access_token}" == "null" ]]; then
-  echo_stderr "Could not create a personal access token"
+  echo_stderr "Error: Could not create a personal access token"
   exit 1
 fi
 
@@ -312,7 +312,7 @@ echo_stderr "Getting project id from project name"
 project_id="$(get_project_id_from_project_name "${project_name}" "${personal_access_token}")"
 # Check project id
 if [[ -z "${project_id}" || "${project_id}" == "null" ]]; then
-  echo_stderr "Could not get project id from project name"
+  echo_stderr "Error: Could not get project id from project name"
   exit 1
 fi
 
@@ -323,7 +323,7 @@ echo_stderr "Creating project token"
 project_access_token="$(create_project_token "${project_id}" "${scope}" "${personal_access_token}")"
 # Check project token
 if [[ -z "${project_access_token}" || "${project_access_token}" == "null" ]]; then
-  echo_stderr "Could not create a project access token"
+  echo_stderr "Error: Could not create a project access token"
   exit 1
 fi
 
