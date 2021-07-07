@@ -14,6 +14,8 @@ _gds-view() {
 ]:gds-path:_gds-view__option_gds_path_completion' \
             '--to-stdout[Print file to stdout
 ]:to-stdout' \
+            '--browser[Open file in BROWSER env var
+]:browser' \
             '--help[Show command help]' \
             '-h[Show command help]' \
             && ret=0

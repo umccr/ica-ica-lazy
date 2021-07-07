@@ -20,6 +20,7 @@ _gds-task-view() {
 ' '--stdout' 'Shows the task stdout
 ' '--stderr' 'Shows the task stderr
 ' '--to-stdout' 'Print file to stdout
+' '--browser' 'Open file in BROWSER env var
 ')
     __gds-task-view_handle_options_flags
 
@@ -31,6 +32,8 @@ _gds-task-view() {
       --stderr)
       ;;
       --to-stdout)
+      ;;
+      --browser)
       ;;
 
     esac

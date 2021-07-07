@@ -18,6 +18,7 @@ _gds-view() {
     FLAGS=('--help' 'Show command help' '-h' 'Show command help')
     OPTIONS=('--gds-path' 'The gds folder path
 ' '--to-stdout' 'Print file to stdout
+' '--browser' 'Open file in BROWSER env var
 ')
     __gds-view_handle_options_flags
 
@@ -26,6 +27,8 @@ _gds-view() {
         _gds-view__option_gds_path_completion
       ;;
       --to-stdout)
+      ;;
+      --browser)
       ;;
 
     esac

@@ -18,6 +18,8 @@ _gds-task-view() {
 ]:stderr' \
             '--to-stdout[Print file to stdout
 ]:to-stdout' \
+            '--browser[Open file in BROWSER env var
+]:browser' \
             '--help[Show command help]' \
             '-h[Show command help]' \
             && ret=0
