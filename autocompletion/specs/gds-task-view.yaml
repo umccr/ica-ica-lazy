@@ -14,3 +14,6 @@ options:
   - name: stderr
     summary: |
       Shows the task stderr
+  - name: to-stdout
+    summary: |
+      Print file to stdout

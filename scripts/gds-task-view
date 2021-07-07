@@ -18,11 +18,13 @@ print_help(){
             -g / --task-run-id: Path to gds file
             -o / --stdout: Shows the task stdout
             -e / --stderr: Shows the task stderr
+            -s / --to-stdout: Print file to stdout
 
         Requirements:
           * docker
           * jq
           * python3
+          * wget
 
         Environment:
           * ICA_BASE_URL
@@ -59,6 +61,7 @@ get_task_log_file(){
 task_id=""
 base_url="${ICA_BASE_URL-}"
 access_token="${ICA_ACCESS_TOKEN-}"
+to_stdout="false"
 print_stdout=0
 print_stderr=0
 log_gds_path=""
@@ -75,6 +78,9 @@ while [ $# -gt 0 ]; do
         ;;
         -e|--stderr)
             print_stderr="1"
+        ;;
+        -s|--to-stdout)
+            to_stdout="true"
         ;;
         -h|--help)
             print_help
@@ -95,15 +101,23 @@ else
   exit 1
 fi
 
-  # Checks, ensure access_token is set
+# Checks, ensure access_token is set
 if [[ -z "${access_token}" ]]; then
   echo "Error: Need to set ICA_ACCESS_TOKEN env var" 1>&2
+  echo "Error: Please first run ica-context-switcher" 1>&2
   print_help
   exit 1
+fi
+
+# Stdout param
+if [[ "${to_stdout}" == "true" ]]; then
+  stdout_param="--to-stdout"
+else
+  stdout_param=""
 fi
 
 # Run ica_view
 ICA_ACCESS_TOKEN="${access_token}" \
 ICA_BASE_URL="${base_url}" \
    gds-view \
-    --gds-path "${log_gds_path}"
+    --gds-path "${log_gds_path}" "${stdout_param}"
