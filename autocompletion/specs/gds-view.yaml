@@ -12,5 +12,5 @@ options:
       command_string: |-
         gds-ls "${CURRENT_WORD}"
   - name: to-stdout
-      summary: |
-        Print file to stdout
+    summary: |
+      Print file to stdout
