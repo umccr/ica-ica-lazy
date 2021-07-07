@@ -8,7 +8,7 @@ set -euo pipefail
 
 print_help(){
   echo "
-        Usage: gds-task-view (--task-run-id trn.abcdef12345678910 ) ( --stdout | --stderr )
+        Usage: gds-task-view (--task-run-id trn.abcdef12345678910 ) ( --stdout | --stderr ) [ --to-stdout | --browser ]
 
         Description:
           Given a task run id and --stdout, --stderr value, view the log file.
@@ -29,6 +29,7 @@ print_help(){
         Environment:
           * ICA_BASE_URL
           * ICA_ACCESS_TOKEN
+          * BROWSER (only if --browser is set)
   "
 }
 
@@ -62,6 +63,7 @@ task_id=""
 base_url="${ICA_BASE_URL-}"
 access_token="${ICA_ACCESS_TOKEN-}"
 to_stdout="false"
+browser="false"
 print_stdout=0
 print_stderr=0
 log_gds_path=""
@@ -81,6 +83,9 @@ while [ $# -gt 0 ]; do
         ;;
         -s|--to-stdout)
             to_stdout="true"
+        ;;
+        -b|--browser)
+            browser="true"
         ;;
         -h|--help)
             print_help
@@ -111,13 +116,15 @@ fi
 
 # Stdout param
 if [[ "${to_stdout}" == "true" ]]; then
-  stdout_param="--to-stdout"
+  out_param="--to-stdout"
+elif [[ "${browser}" == "true" ]]; then
+  out_param="--browser"
 else
-  stdout_param=""
+  out_param=""
 fi
 
 # Run ica_view
 ICA_ACCESS_TOKEN="${access_token}" \
 ICA_BASE_URL="${base_url}" \
    gds-view \
-    --gds-path "${log_gds_path}" "${stdout_param}"
+    --gds-path "${log_gds_path}" "${out_param}"

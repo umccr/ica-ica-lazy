@@ -8,11 +8,12 @@ set -euo pipefail
 
 print_help(){
   echo "
-        Usage: gds-view (--gds-path gds://volume-name/path-to-file)
+        Usage: gds-view ( --gds-path gds://volume-name/path-to-file ) [ --to-stdout | --browser ]
 
         Options:
             -g / --gds-path: Path to gds file
             -s / --to-stdout: Print file to stdout
+            -b / --browser: Open url in browser
 
         Requirements:
           * docker
@@ -23,9 +24,11 @@ print_help(){
         Environment:
           * ICA_BASE_URL
           * ICA_ACCESS_TOKEN
+          * BROWSER (only if --browser is set) should point to absolute path to the FireFox executable
 
         The program runs the links binary through docker to
         the gds path via a presigned url.  This can be used on text files and even gzipped files!
+        Use --to-stdout to print the file to stdout, or --browser to open up the file in your browser.
         "
 }
 
@@ -34,6 +37,7 @@ gds_path=""
 access_token="${ICA_ACCESS_TOKEN-}"
 base_url="${ICA_BASE_URL-}"
 to_stdout="false"
+browser="false"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -43,6 +47,9 @@ while [ $# -gt 0 ]; do
         ;;
         -s|--to-stdout)
             to_stdout="true"
+        ;;
+        -b|--browser)
+            browser="true"
         ;;
         -h|--help)
             print_help
@@ -148,10 +155,7 @@ file_id="$(get_file_id "${volume_name}" "${file_path}" "${access_token}" "${base
 presigned_url="$(get_presigned_url_from_file_id "${file_id}" "${access_token}" "${base_url}")"
 
 # Present file
-if [[ "${to_stdout}" == "false" ]]; then
-  # Run links through docker
-  run_links "${presigned_url}"
-else
+if [[ "${to_stdout}" == "true" ]]; then
   # Print to stdout
   wget --output-document - "${presigned_url}" 2>/dev/null
   # Check if we're in a pipe or not
@@ -159,4 +163,13 @@ else
     # If we're running in terminal, we want the user to have their console back
     echo ""
   fi
+elif [[ "${browser}" == "true" ]]; then
+  if [[ -z "${BROWSER-}" ]]; then
+    echo_stderr "Error: --browser selected but 'BROWSER' env var is not set"
+    exit 1
+  fi
+  "${BROWSER}" "${presigned_url}"
+else
+  # Run links through docker
+  run_links "${presigned_url}"
 fi

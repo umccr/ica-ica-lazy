@@ -17,3 +17,6 @@ options:
   - name: to-stdout
     summary: |
       Print file to stdout
+  - name: browser
+    summary: |
+      Open file in BROWSER env var
