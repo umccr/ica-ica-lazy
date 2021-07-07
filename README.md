@@ -17,6 +17,7 @@
 - [Folder / file traversal](#folder--file-traversal)
   - [`gds-ls`](#gds-ls)
   - [`gds-view`](#gds-view)
+  - [`gds-task-view`](#gds-task-view)
 - [Data sharing scripts](#data-sharing-scripts)
   - [`gds-sync-download`](#gds-sync-download)
   - [`gds-sync-upload`](#gds-sync-upload)
@@ -284,18 +285,45 @@ visualise the file.
 
 **Options:**
   * --gds-path: Path to the gds file you wish to view.
+  * --to-stdout: Print file to stdout
 
 **Requirements:**
   * curl
   * jq
   * python3
   * docker
+  * wget
 
 **Environment vars:**
   * ICA_BASE_URL
   * ICA_ACCESS_TOKEN  
     * *You will need to first run `ica-context-switcher` to get this variable into your environment*
+    
 
+### `gds-task-view`
+> auto-completion :white_check_mark:
+
+Given a task run id and --stdou OR --stderr parameter, view the log file of said ICA task run.
+Calls gds-view to view the file.
+
+**Options:**
+ * --task-run-id: Path to gds file
+ * --stdout: Shows the task stdout
+ * --stderr: Shows the task stderr
+ * --to-stdout: Print file to stdout
+
+**Requirements**
+  * curl
+  * jq
+  * python3
+  * docker
+  * wget
+
+**Environment vars:**
+  * ICA_BASE_URL
+  * ICA_ACCESS_TOKEN  
+    * *You will need to first run `ica-context-switcher` to get this variable into your environment*
+  
 
 ## Data sharing scripts
 
