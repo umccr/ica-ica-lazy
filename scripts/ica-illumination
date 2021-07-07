@@ -31,6 +31,7 @@ print_help(){
   Requirements:
     * jq
     * docker
+    * sed (gsed for MacOS users)
   "
 }
 
@@ -57,7 +58,7 @@ check_binaries(){
   : '
   Make sure that jq / docker binaries exists in PATH
   '
-  if ! (type docker jq 1>/dev/null); then
+  if ! (type docker jq "${sed_binary}" 1>/dev/null); then
     return 1
   fi
 }
@@ -102,6 +103,13 @@ while [ $# -gt 0 ]; do
     shift
 done
 
+# Get sed binary
+if [[ "${OSTYPE}" == "darwin" ]]; then
+  sed_binary="gsed"
+else
+  sed_binary="sed"
+fi
+
 # Check binaries
 if ! check_binaries; then
   echo_stderr "Please make sure that jq and docker"
@@ -118,9 +126,16 @@ fi
 # Get access token
 project_access_token="$(get_access_token "${project_name}" "${DEFAULT_SCOPE}" "${TOKENS_PATH}")"
 
-if [[ -z "${project_access_token}" ]]; then
-  echo_stderr "Could not get access token for project \"${project_name}\" with scope \"${DEFAULT_SCOPE}\""
-  echo_stderr "Please first run 'ica-add-access-token --project-name \"${project_name}\" --scope \"${DEFAULT_SCOPE}\""
+if [[ -z "${project_access_token}" || "${project_access_token}" == "null" ]]; then
+  echo_stderr "Error: Could not get access token for project \"${project_name}\" with scope \"${DEFAULT_SCOPE}\""
+  echo_stderr "Error: Please first run 'ica-add-access-token --project-name \"${project_name}\" --scope \"${DEFAULT_SCOPE}\""
+  exit 1
+fi
+
+# Check docker is running
+if ! docker ps >/dev/null; then
+  echo_stderr "Error: could not confirm that docker was running correctly, exiting"
+  exit 1
 fi
 
 # Run illumination
@@ -128,12 +143,13 @@ docker_id="$(run_illumination_docker "${project_access_token}" "${port}")"
 
 # Check id
 if [[ -z "${docker_id}" ]]; then
-  echo_stderr "Could not get docker container id"
+  echo_stderr "Error: Could not get docker container id"
+  exit 1
 fi
 
 echo_stderr "Docker launched Illumination successfully"
 echo_stderr "Please head to localhost://${port} on your preferred browser"
 
-docker_name="$(docker container inspect "${docker_id}" | jq --raw-output '.[0].Name' | sed 's%^\/%%')"
+docker_name="$(docker container inspect "${docker_id}" | jq --raw-output '.[0].Name' | "${sed_binary}" 's%^\/%%')"
 
 echo_stderr "To stop the container, please run 'docker kill \"${docker_name}\"'"
