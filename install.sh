@@ -209,6 +209,10 @@ if [[ "${user_shell}" == "bash" ]]; then
   echo_stderr "done"
 elif [[ "${user_shell}" == "zsh" ]]; then
   echo_stderr "fpath=(\"${main_dir}/autocompletion/${user_shell}/\" \$fpath)"
+  if [[ "${OSTYPE}" == "darwin"* ]]; then
+    # Mac Users need to run 'autoload' before running compinit
+    echo_stderr "autoload -Uz compinit"
+  fi
   echo_stderr "compinit"
 fi
 
