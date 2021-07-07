@@ -12,6 +12,8 @@ _gds-view() {
         _arguments -s  \
             '--gds-path[The gds folder path
 ]:gds-path:_gds-view__option_gds_path_completion' \
+            '--to-stdout[Print file to stdout
+]:to-stdout' \
             '--help[Show command help]' \
             '-h[Show command help]' \
             && ret=0

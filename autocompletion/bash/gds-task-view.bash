@@ -19,6 +19,7 @@ _gds-task-view() {
     OPTIONS=('--task-run-id' 'Path to gds file
 ' '--stdout' 'Shows the task stdout
 ' '--stderr' 'Shows the task stderr
+' '--to-stdout' 'Print file to stdout
 ')
     __gds-task-view_handle_options_flags
 
@@ -28,6 +29,8 @@ _gds-task-view() {
       --stdout)
       ;;
       --stderr)
+      ;;
+      --to-stdout)
       ;;
 
     esac

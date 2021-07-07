@@ -16,6 +16,8 @@ _gds-task-view() {
 ]:stdout' \
             '--stderr[Shows the task stderr
 ]:stderr' \
+            '--to-stdout[Print file to stdout
+]:to-stdout' \
             '--help[Show command help]' \
             '-h[Show command help]' \
             && ret=0

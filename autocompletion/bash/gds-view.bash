@@ -17,12 +17,15 @@ _gds-view() {
 
     FLAGS=('--help' 'Show command help' '-h' 'Show command help')
     OPTIONS=('--gds-path' 'The gds folder path
+' '--to-stdout' 'Print file to stdout
 ')
     __gds-view_handle_options_flags
 
     case ${MYWORDS[$INDEX-1]} in
       --gds-path)
         _gds-view__option_gds_path_completion
+      ;;
+      --to-stdout)
       ;;
 
     esac
