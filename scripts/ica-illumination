@@ -77,7 +77,7 @@ run_illumination_docker(){
     -it \
     --rm \
     --detach \
-    --env "IAP_TOKEN=${ica_access_token}" \
+    --env "ICA_ACCESS_TOKEN=${ica_access_token}" \
     --env "PORT=${port}" \
     --publish "${port}:${port}" \
     "umccr/illumination:latest"
