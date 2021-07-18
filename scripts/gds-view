@@ -6,6 +6,11 @@ Uses docker links to view the gds file through its presigned url
 
 set -euo pipefail
 
+## Internal functions
+echo_stderr(){
+  echo "$@" 1>&2
+}
+
 print_help(){
   echo "
         Usage: gds-view ( --gds-path gds://volume-name/path-to-file ) [ --to-stdout | --browser ]

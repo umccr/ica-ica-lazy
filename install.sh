@@ -146,6 +146,16 @@ if [[ "${user_shell}" == "bash" ]]; then
   fi
 fi
 
+# Check bash version for macos users (even if they're not using bash as their shell)
+if [[ "${OSTYPE}" == "darwin"* ]]; then
+    echo_stderr "Checking env bash version"
+    if [[ "$(bash -c "echo \${BASH_VERSION}" | cut -d'.' -f1)" -le "4" ]]; then
+      echo_stderr "ERROR: Please install bash version 4 or higher (even if you're running zsh as your default shell)"
+      echo_stderr "ERROR: Please run 'brew install bash'"
+      exit 1
+  fi
+fi
+
 # Check pass db
 echo_stderr "Checking pass db has a value at /ica/api-keys/default-api-key"
 echo_stderr "You may be prompted for your gpg password in a few seconds"

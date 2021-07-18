@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+
+: '
+Show all the tokens in ~/.ica-ica-lazy/tokens/tokens.json
+'
+
+## Internal functions
+echo_stderr(){
+  echo "$@" 1>&2
+}
+
+get_sed_command(){
+  if [[ "${OSTYPE}" == "darwin"* ]]; then
+    echo "gsed"
+  else
+    echo "sed"
+  fi
+}
+
+get_printf_command(){
+  if [[ "${OSTYPE}" == "darwin"* ]]; then
+    echo "gprintf"
+  else
+    echo "printf"
+  fi
+}
+
+
+get_epoch_expiry(){
+  : '
+  Get the epoch value of the expiry date of the tokens
+  '
+  local access_token="$1"
+  echo "${access_token}" | \
+    "$(get_sed_command)" -r 's/^(\S+)\.(\S+)\.(\S+)$/\2/' | \
+    base64 -d 2>/dev/null | \
+    jq -r '.exp'
+}
+
+get_seconds_to_expiry(){
+  : '
+  Get seconds to expiry based on epoch time
+  '
+  local expiry_epoch="$1"
+  bc <<< "${expiry_epoch} - $(date +%s)"
+}
+
+print_time_to_expiry(){
+  : '
+  Convert the epoch time to expiry to a readable date format
+  '
+  local expiry_in_seconds="$1"
+
+  python3 -c "from datetime import timedelta; \
+              time_to_expiry=timedelta(seconds=${expiry_in_seconds}); \
+              d = {'days': time_to_expiry.days}; \
+              d['hours'], rem = divmod(time_to_expiry.seconds, 3600); \
+              d['minutes'], d['seconds'] = divmod(rem, 60); \
+              print('Expired') if ${expiry_in_seconds} < 0 \
+              else print(f\"{d['days']} days, {d['hours']} hours, {d['minutes']} minutes, {d['seconds']} seconds\")"
+}
+
+get_print_time_to_expiry_from_access_token(){
+  : '
+  Return the expiry in printable format
+  '
+  # Inputs
+  local access_token="$1"
+
+  # local vars
+  local epoch_expiry
+  local seconds_to_expiry
+
+  # Get the JWT token expiry time
+  epoch_expiry="$(get_epoch_expiry "${access_token}")"
+
+  # Compare expiry to current time
+  seconds_to_expiry="$(get_seconds_to_expiry "${epoch_expiry}")"
+
+  # Return print version
+  print_time_to_expiry "${seconds_to_expiry}"
+}
+
+check_binaries(){
+  : '
+  Make sure that  jq / python3 readarray / sed / printf binary exists in PATH
+  '
+  if ! (type jq python3 readarray "$(get_sed_command)" "$(get_printf_command)" 1>/dev/null); then
+    return 1
+  fi
+}
+
+print_help(){
+  echo "
+        Usage: ica-show-tokens
+
+        Options:
+            -h / --help: Print this help command
+
+        Requirements:
+          * jq
+          * python3
+          * sed  (macos users to install gsed through 'brew install gnu-sed')
+          * printf (macos users to install gprintf through 'brew install coreutils')
+
+        Show all of the tokens stored in '$HOME/.ica-ica-lazy/tokens/tokens.json'
+        "
+}
+
+# Globals
+TOKENS_PATH="$HOME/.ica-ica-lazy/tokens/tokens.json"
+
+# Print help, maybe?
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            print_help
+            exit 1
+    esac
+    shift
+done
+
+# Check binaries
+if ! check_binaries; then
+  echo_stderr "Please make sure binaries jq, python3, readarray, $(get_sed_command) $(get_printf_command) are all available on your PATH variable"
+  print_help
+  return 1
+fi
+
+# Iterate through each project and then each scope
+
+# Initialise column arrays
+print_project_array=()
+print_scope_array=()
+print_expiry_array=()
+
+# Get project array
+readarray -t projects_array < <(jq --raw-output --compact-output 'keys[]' <<< cat "${TOKENS_PATH}")
+
+# Iterate through projects
+for project in "${projects_array[@]}"; do
+    # Get scopes
+    readarray -t scopes_array < <(jq --raw-output --compact-output --arg "project" "${project}" '.[$project] | keys[]' <<< cat "${TOKENS_PATH}")
+    # Iterate through scopes
+    for scope in "${scopes_array[@]}"; do
+      # Get token scope
+      project_scope_token="$(jq --raw-output --arg "project" "$project" --arg "scope" "$scope" '.[$project][$scope]' <<< cat "${TOKENS_PATH}")"
+      # Get arrays
+      print_project_array+=("${project}")
+      print_scope_array+=("${scope}")
+      print_expiry_array+=("$(get_print_time_to_expiry_from_access_token "${project_scope_token}")")
+    done
+done
+
+# Get number of rows
+n_rows="${#print_project_array[@]}"
+
+# Print through 'column'
+(
+  # Print header
+  "$(get_printf_command)" "PROJECT#SCOPE#EXPIRY\n"
+  # Iterate through each elements and print the row-element for each 'column array'
+  for i in $(eval "echo {0..$(bc <<< "$n_rows - 1")}"); do
+    "$(get_printf_command)" "%s#%s#%s\n" "${print_project_array[$i]}" "${print_scope_array[$i]}" "${print_expiry_array[$i]}"
+  done
+) | column -s'#' -c4 -t
+

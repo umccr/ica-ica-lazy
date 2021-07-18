@@ -123,8 +123,19 @@ if [[ -z "${project_name-}" ]]; then
   exit 1
 fi
 
+# Check project name in TOKENS PATH
+if [[ -z "$(jq --raw-output --arg project "${project_name}" 'select(.[$project] != null) | .[$project] | keys' <<< cat "${TOKENS_PATH}")" ]]; then
+  echo_stderr "Error: Could not get project '${project_name}' from tokens path"
+  exit 1
+fi
+
 # Get access token
 project_access_token="$(get_access_token "${project_name}" "${DEFAULT_SCOPE}" "${TOKENS_PATH}")"
+
+# Try admin scope
+if [[ -z "${project_access_token}" || "${project_access_token}" == "null" ]]; then
+  project_access_token="$(get_access_token "${project_name}" "admin" "${TOKENS_PATH}")"
+fi
 
 if [[ -z "${project_access_token}" || "${project_access_token}" == "null" ]]; then
   echo_stderr "Error: Could not get access token for project \"${project_name}\" with scope \"${DEFAULT_SCOPE}\""
