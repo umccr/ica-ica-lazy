@@ -60,7 +60,7 @@ get_path(){
   '
 
   # Function outputs
-  python3 -c "from urllib.parse import urlparse; print(urlparse(\"${gds_path}\").path)"
+  python3 -c "from urllib.parse import urlparse; from pathlib import Path; print(str(Path(urlparse(\"${gds_path}\").path)).rstrip(\"/\") + \"/\")"
 
 }
 
