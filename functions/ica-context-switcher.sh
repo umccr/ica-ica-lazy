@@ -49,7 +49,7 @@ ica-context-switcher(){
 
   _print_help(){
   echo "
-  Usage ica-context-switcher [--project-name <project-name>] (--scope read-only|admin)
+  Usage ica-context-switcher [--project-name <project-name>] (--scope read-only|admin|contributor)
 
   Description:
     This program will take a token for this project / scope combination that's stored in '~/.ica-ica-lazy/tokens/tokens.json'
@@ -122,8 +122,8 @@ ica-context-switcher(){
   if [[ -z "${scope-}" ]]; then
     # Set scope to 'read-only'
     scope="read-only"
-  elif [[ "${scope}" != "admin" && "${scope}" != "read-only" ]]; then
-    _echo_stderr "--scope must be one of admin or read-only"
+  elif [[ "${scope}" != "admin" && "${scope}" != "read-only" && "${scope}" != "contributor" ]]; then
+    _echo_stderr "--scope must be one of read-only, contributor or admin"
     _print_help
     return 1
   fi
