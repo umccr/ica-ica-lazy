@@ -10,7 +10,7 @@ print_help(){
         Usage: gds-sync-download (--gds-path gds://volume-name/path-to-folder/) (--download-path downloads/)
 
         Options:
-            -g / --gds-path: Path to gds file
+            -g / --gds-path: Path to gds directory
             -d / --download-path: The path you'd like to download the data to. Working dir by default.
 
         Requirements:

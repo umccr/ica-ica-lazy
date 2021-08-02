@@ -18,7 +18,7 @@ print_help(){
           Upload a directory to gds through aws sync credentials
 
         Options:
-            -g / --gds-path: Path to gds file
+            -g / --gds-path: Path to gds directory
             -s / --src-path: The path you'd like to src the data to. Working dir by default.
 
         Requirements:
