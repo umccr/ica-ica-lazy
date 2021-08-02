@@ -13,7 +13,7 @@ _ica-context-switcher() {
             '--project-name[Name of the project
 ]:project-name:_ica-context-switcher__option_project_name_completion' \
             '--scope[The privilege level you'"'"'d like to associate with the token
-]:scope:("admin" "read-only")' \
+]:scope:("read-only" "contributor" "admin")' \
             '--help[Show command help]' \
             '-h[Show command help]' \
             && ret=0

@@ -26,7 +26,7 @@ _ica-context-switcher() {
         _ica-context-switcher__option_project_name_completion
       ;;
       --scope)
-        _ica-context-switcher_compreply "admin" "read-only"
+        _ica-context-switcher_compreply "read-only" "contributor" "admin"
         return
       ;;
 

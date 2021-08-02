@@ -25,7 +25,7 @@ _ica-add-access-token() {
       --project-name)
       ;;
       --scope)
-        _ica-add-access-token_compreply "admin" "read-only"
+        _ica-add-access-token_compreply "read-only" "contributor" "admin"
         return
       ;;
 
