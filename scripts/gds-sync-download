@@ -78,7 +78,7 @@ get_folder_path_from_gds_path() {
   local gds_path="$1"
 
   # Returns the path attribute of gds_path input
-  python3 -c "from urllib.parse import urlparse; from pathlib import Path; print(Path(urlparse(\"${gds_path}\").path))"
+  python3 -c "from urllib.parse import urlparse; from pathlib import Path; print(str(Path(urlparse(\"${gds_path}\").path)).rstrip(\"/\") + \"/\")"
 }
 
 # Get folder id
@@ -96,7 +96,7 @@ get_folder_id() {
     --silent \
     --request GET \
     --header "Authorization: Bearer ${access_token}" \
-    "${base_url}/v1/folders?volume.name=${volume_name}&path=${folder_path}/" |
+    "${base_url}/v1/folders?volume.name=${volume_name}&path=${folder_path}" |
     jq \
       --raw-output \
       '.items[] | .id'

@@ -83,7 +83,7 @@ get_folder_path_from_gds_path() {
   '
   local gds_path="$1"
   # Returns the path attribute of gds_path input
-  python3 -c "from urllib.parse import urlparse; print(urlparse(\"${gds_path}\").path)"
+  python3 -c "from urllib.parse import urlparse; from pathlib import Path; print(str(Path(urlparse(\"${gds_path}\").path)).rstrip(\"/\") + \"/\")"
 }
 
 # Get folder id
