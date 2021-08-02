@@ -1,0 +1,367 @@
+#!/usr/bin/env bash
+
+: '
+Traverse a directory and find files directories with a given syntax
+
+Credit where credit is due:
+* https://til.hashrocket.com/posts/uv0bjiokwk-use-jq-to-filter-objects-list-with-regex
+'
+
+# Globals
+MAX_PAGE_SIZE=1000
+
+# Help function
+print_help(){
+  echo "
+        Usage: gds-find (--gds-path gds://volume-name/path-to-folder/) (--type d/directory/f/file)
+                                                                       [--mindepth <int>]
+                                                                       [--maxdepth <int>]
+                                                                       [--name <regex>]
+
+        Options:
+            -g / --gds-path:  Required - Path to gds directory
+            -t / --type:      Required - What are we looking for? A directory or file
+            --name:           Required - File / Directory name, '*' globbing is supported
+            --mindepth:       Optional - Minimum directory depth before returning results
+            --maxdepth:       Optional - Maximum directory depth before returning results
+
+        Requirements:
+          * jq     (v1.5+)
+          * python3 (v3.4+)
+          * curl
+
+        Environment:
+          * ICA_BASE_URL
+          * ICA_ACCESS_TOKEN
+        "
+}
+
+## Internal functions
+echo_stderr(){
+  echo "$@" 1>&2
+}
+
+binaries_check(){
+  : '
+  Check each of the required binaries are available
+  '
+  if ! (type jq python3 curl 1>/dev/null); then
+    return 1
+  fi
+}
+
+# Get volume from gds path
+get_volume_from_gds_path() {
+  : '
+  Assumes urllib is available on python3
+  '
+  local gds_path="$1"
+
+  # Returns the netloc attribute of the gds_path
+  python3 -c "from urllib.parse import urlparse; print(urlparse(\"${gds_path}\").netloc)"
+}
+
+# Get folder path
+get_folder_path_from_gds_path() {
+  : '
+  Assumes urllib is available on python3
+  '
+  local gds_path="$1"
+
+  # Returns the path attribute of gds_path input
+  python3 -c "from urllib.parse import urlparse; from pathlib import Path; print(str(Path(urlparse(\"${gds_path}\").path)).rstrip(\"/\") + \"/\")"
+}
+
+# Get the parent path
+get_parent_path(){
+  : '
+  Take the path input as a python lib and then return the parent (with a trailing slash)
+  '
+
+  local gds_path_attr="$1"
+
+  python3 -c "from pathlib import Path; print(str(Path(\"${gds_path_attr}\").parent).rstrip(\"/\") + \"/\")"
+}
+
+check_volume(){
+  : '
+  Confirm the volume exists
+  '
+  local volume_name="$1"
+
+  if ! curl \
+         --silent \
+         --location \
+         --fail \
+         --request GET \
+         --header 'Accept: application/json' \
+         --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+         --url "${ICA_BASE_URL}/v1/volumes/${volume_name}" \
+         --get >/dev/null 2>&1; then
+    return 1
+  else
+    return 0
+  fi
+}
+
+check_path_is_folder(){
+  : '
+  Check if the current path is a folder by first listing the folders in the parent path
+  and searching for this folder
+  '
+
+  local volume_name="$1"
+  local gds_path_attr="$2"
+  local data_params=( "--data" "volume.name=${volume_name}"
+                      "--data" "recursive=false"
+                      "--data" "pageSize=${MAX_PAGE_SIZE}" )
+
+  if [[ -z "${gds_path_attr}" || "${gds_path_attr}" == "/" ]]; then
+    # Check volume exists
+    if ! check_volume "${volume_name}"; then
+      return 1
+    else
+      return 0
+    fi
+  fi
+
+
+  if [[ -n "${gds_path_attr}" && "${gds_path_attr}" != "/" ]]; then
+    data_params+=( "--data" "path=$(get_parent_path "${gds_path_attr}")*" )
+  fi
+
+  if ! folders_obj="$(curl \
+                        --silent \
+                        --location \
+                        --fail \
+                        --request GET \
+                        --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+                        --url "${ICA_BASE_URL}/v1/folders" \
+                        --get \
+                        "${data_params[@]}" 2>/dev/null)"; then
+    return 1
+  fi
+
+  if [[ "$(jq \
+            --raw-output \
+            --arg "gds_path_attr" "${gds_path_attr}" \
+            '.items[] | select ( .path == $gds_path_attr ) | .path' <<< "${folders_obj}")" != "${gds_path_attr}" ]]; then
+      return 1
+  fi
+}
+
+get_file_names(){
+  : '
+  list the files and the subfolders of the path that match
+  '
+  local volume_name="$1"
+  local gds_path_attr="$2"
+  local name="$3"
+  local files_obj
+  local files
+
+  files_obj="$(curl \
+                 --silent \
+                 --location \
+                 --fail \
+                 --request GET \
+                 --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+                 --url "${ICA_BASE_URL}/v1/files" \
+                 --get \
+                 --data "volume.name=${volume_name}" \
+                 --data "recursive=false" \
+                 --data "pageSize=${MAX_PAGE_SIZE}" \
+                 --data "path=${gds_path_attr}*" 2>/dev/null)"
+
+  files="$(jq --raw-output \
+             --arg "volume_name" "${volume_name}" \
+             --arg "name" "${name}" \
+             '.items[] | select(.name | test($name)) | "gds://\($volume_name)\(.path)"' <<< "${files_obj}")"
+
+  printf "%s" "${files}" | sort -f
+}
+
+get_subfolder_names(){
+  : '
+  list the files and the subfolders of the path that match
+  '
+  local volume_name="$1"
+  local gds_path_attr="$2"
+  local name="$3"
+  local folders_obj
+  local folders
+
+  # Get folders and files
+  folders_obj="$(curl \
+                   --silent \
+                   --location \
+                   --fail \
+                   --request GET \
+                   --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+                   --url "${ICA_BASE_URL}/v1/folders" \
+                   --get \
+                   --data "volume.name=${volume_name}" \
+                   --data "recursive=false" \
+                   --data "pageSize=${MAX_PAGE_SIZE}" \
+                   --data "path=${gds_path_attr}*" 2>/dev/null)"
+
+  if [[ -z "${name}" ]]; then
+    # We're returning the path
+    jq --compact-output --raw-output \
+      '.items[] | .path' <<< "${folders_obj}"
+  else
+    # We're printing the outputs with the volume name included
+    folders="$(jq --raw-output \
+                 --arg "volume_name" "${volume_name}" \
+                 --arg "name" "${name}" \
+                 '.items[] | select(.name|test($name)) | "gds://\($volume_name)\(.path)"' <<< "${folders_obj}")"
+    printf "%s" "${folders}" | sort -f
+  fi
+}
+
+gds_search(){
+  : '
+  Recursively list and print all files / directories with the existing dirs
+  '
+  local volume_name="$1"
+  local folder_path="$2"
+  local depth="$3"
+  local mindepth="$4"
+  local maxdepth="$5"
+  local type="$6"
+  local name="$7"
+  local subfolder_paths_array=()
+
+  # Check we haven't depthed too far
+  if [[ "${maxdepth}" != "-1" && "${maxdepth}" -le "${depth}" ]]; then
+    # We've gone too far
+    return 0
+  fi
+
+  # If we're within 'range' of printing files / dirs, then do so
+  if [[ ( "${mindepth}" == "-1" || "${mindepth}" -le "${depth}" ) && ( "${maxdepth}" == "-1" || "${depth}" -le "${maxdepth}" ) ]]; then
+    if [[ "${type}" == "directory" ]]; then
+      get_subfolder_names "${volume_name}" "${folder_path}" "${name}"
+    else
+      get_file_names "${volume_name}" "${folder_path}" "${name}"
+    fi
+  fi
+
+  # We're still not beyond the maximum depth
+  depth="$(expr "${depth}" + 1)"
+
+  # Recollect the array of subfolders
+  readarray -t subfolder_paths_array < <(get_subfolder_names "${volume_name}" "${folder_path}")
+
+  # Iterate through array
+  for subfolder_path in "${subfolder_paths_array[@]}"; do
+    # echo_stderr "Checking folder gds://${volume_name}/${subfolder_path}"  # FIXME - add in as a debug parameter
+    gds_search "${volume_name}" "${subfolder_path}" "${depth}" "${mindepth}" "${maxdepth}" "${type}" "${name}"
+  done
+}
+
+# Get args
+gds_path=""
+type=""
+mindepth="-1"
+maxdepth="-1"
+name=""
+
+# Get args from command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -g | --gds-path)
+      gds_path="$2"
+      shift 1
+      ;;
+    -t | --type)
+      type="$2"
+      shift 1
+      ;;
+    --mindepth)
+      mindepth="$2"
+      shift 1
+      ;;
+    --maxdepth)
+      maxdepth="$2"
+      shift 1
+      ;;
+    --name)
+      name="$2"
+      shift 1
+      ;;
+    -h | --help)
+      print_help
+      exit 0
+      ;;
+  esac
+  shift 1
+done
+
+# Check and set args
+if [[ -z "${type}" ]]; then
+  echo_stderr "--type not specified"
+  exit 1
+elif [[ "${type}" == "d" || "${type}" == "directory" ]]; then
+  type="directory"
+elif [[ "${type}" == "f" || "${type}" == "file" ]]; then
+  type="file"
+else
+  echo_stderr "Could not determine type from --type arg '${type}'"
+  echo_stderr "Must be one of 'd' / 'directory' / 'f' / 'file'"
+  exit 1
+fi
+
+# Check mindepth / maxdepth
+if [[ "${mindepth}" =~ ^[0-9]+$ || "${mindepth}" == "-1" ]]; then
+  # Maxdepth integer all good
+  :
+else
+  echo_stderr "Please ensure mindepth is a positive integer, got '${mindepth}'"
+  exit 1
+fi
+if [[ "${maxdepth}" =~ ^[0-9]+$ || "${maxdepth}" == "-1" ]]; then
+  # Maxdepth integer all good
+  :
+else
+  echo_stderr "Please ensure maxdepth is a positive integer '${maxdepth}'"
+  exit 1
+fi
+
+# Ensure gds_path param is set
+if [[ -z "${gds_path}" ]]; then
+  echo_stderr "Please make sure --gds-path parameter is set"
+  exit 1
+fi
+
+if [[ -z "${name}" ]]; then
+  echo_stderr "Please make sure --name parameter is set"
+  exit 1
+fi
+
+# Start
+if [[ -z "${ICA_BASE_URL-}" ]]; then
+    echo "Error: Need to set var \"ICA_BASE_URL\"" 1>&2
+    exit 1
+fi
+
+if [[ -z "${ICA_ACCESS_TOKEN-}" ]]; then
+    echo "Error: Need to set var \"ICA_ACCESS_TOKEN\"" 1>&2
+    echo "Error: Please first run ica-context-switcher" 1>&2
+    exit 1
+fi
+
+
+# Get volume path from gds path
+volume_name="$(get_volume_from_gds_path "${gds_path}")"
+folder_path="$(get_folder_path_from_gds_path "${gds_path}")"
+
+# replace literal * with \\S
+name="${name//\*/\\S+}"
+
+if ! check_path_is_folder "${volume_name}" "${folder_path}"; then
+  echo_stderr "Could not find directory '${gds_path}'"
+  exit 1
+fi
+
+gds_search "${volume_name}" "${folder_path}" "0" "${mindepth}" "${maxdepth}" "${type}" "${name}"

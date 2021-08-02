@@ -1,0 +1,30 @@
+---
+name: gds-find
+
+title: find folders and files on gds
+
+options:
+  - name: gds-path
+    summary: |
+      The gds folder path
+    type: string
+    completion:
+      command_string: |-
+        gds-ls "${CURRENT_WORD}"
+  - name: type
+    summary: |
+      File or directory
+    type: string
+    enum: [ file, directory ]
+  - name: name
+    summary: |
+      Name of file or directory
+    type: string
+  - name: mindepth
+    summary: |
+      The minimum recursion depth
+    type: string
+  - name: maxdepth
+    sumamry: |
+      The maximum recursion depth
+    type: string
