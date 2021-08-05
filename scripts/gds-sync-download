@@ -7,11 +7,14 @@ Obtain the aws access credentials for a gds folder then run the aws sync command
 # Help function
 print_help(){
   echo "
-        Usage: gds-sync-download (--gds-path gds://volume-name/path-to-folder/) (--download-path downloads/)
+        Usage: gds-sync-download (--gds-path gds://volume-name/path-to-folder/)
+                                 (--download-path downloads/)
+                                 [--write-script-path run-script.sh]
 
         Options:
             -g / --gds-path: Path to gds directory
             -d / --download-path: The path you'd like to download the data to. Working dir by default.
+            -o / --write-script-path: Don't execute the command, just write to a script instead
 
         Requirements:
           * aws
@@ -232,6 +235,10 @@ while [ $# -gt 0 ]; do
       download_path="$2"
       shift 1
       ;;
+    -o | --write-script-path)
+      write_script_path="$2"
+      shift 1
+      ;;
     -h | --help)
       print_help
       exit 0
@@ -317,6 +324,24 @@ export AWS_ACCESS_KEY_ID="${aws_access_key_id}"
 export AWS_SECRET_ACCESS_KEY="${aws_secret_access_key}"
 export AWS_SESSION_TOKEN="${aws_session_token}"
 export AWS_DEFAULT_REGION="${aws_default_region}"
+
+# Don't actually run the command
+if [[ -n "${write_script_path}" ]]; then
+  echo_stderr "Writing command to ${write_script_path}"
+  {
+    echo "#!/usr/bin/env bash"
+    echo ""
+    echo "# Set env vars"
+    echo "export AWS_ACCESS_KEY_ID=\"${aws_access_key_id}\""
+    echo "export AWS_SECRET_ACCESS_KEY=\"${aws_secret_access_key}\""
+    echo "export AWS_SESSION_TOKEN=\"${aws_session_token}\""
+    echo "export AWS_DEFAULT_REGION=\"${aws_default_region}\""
+    echo ""
+    echo "# Run aws s3 sync upload command"
+    echo aws s3 sync "s3://${aws_bucket_name}/${aws_key_prefix}" "${download_path}" "${aws_s3_sync_args[@]}"
+  } > "${write_script_path}"
+  exit 0
+fi
 
 # Use trap to catch the command to debug
 trap 'previous_command=$this_command; this_command=$BASH_COMMAND' DEBUG
