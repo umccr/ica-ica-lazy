@@ -10,7 +10,7 @@ Do you match one or more of the following criteria?
 
 - [ ] Would you like traverse gds as if it were just like a standard POSIX filesystem instead?
 
-- [ ] Would like be in two ica project contexts in separate terminals simultaneously?
+- [ ] Would you like to be in two ica project contexts in separate terminals simultaneously?
 
 Yes? You've come to the right place!
 
