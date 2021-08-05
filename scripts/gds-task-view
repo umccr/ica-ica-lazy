@@ -19,6 +19,7 @@ print_help(){
             -o / --stdout: Shows the task stdout
             -e / --stderr: Shows the task stderr
             -s / --to-stdout: Print file to stdout
+            -b / --browser: Show in browser
 
         Requirements:
           * docker
