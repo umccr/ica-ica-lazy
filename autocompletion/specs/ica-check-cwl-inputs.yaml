@@ -1,0 +1,12 @@
+---
+name: ica-check-cwl-inputs
+
+title: ica check cwl inputs
+
+options:
+  - name: input-json
+      The WES launch input json
+    type: string
+    completion:
+      command_string: |-
+        find $PWD -name '*.json'
