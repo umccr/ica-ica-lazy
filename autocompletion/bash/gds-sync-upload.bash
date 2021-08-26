@@ -18,6 +18,7 @@ _gds-sync-upload() {
     FLAGS=('--help' 'Show command help' '-h' 'Show command help')
     OPTIONS=('--src-path' 'The directory you would like to upload to
 ' '--gds-path' 'The gds folder path
+' '--write-script-path' 'Dont run this script, instead write it (along with the secrets) to a script
 ')
     __gds-sync-upload_handle_options_flags
 
@@ -28,6 +29,8 @@ _gds-sync-upload() {
       ;;
       --gds-path)
         _gds-sync-upload__option_gds_path_completion
+      ;;
+      --write-script-path)
       ;;
 
     esac

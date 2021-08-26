@@ -14,6 +14,8 @@ _gds-sync-download() {
 ]:download-path:_path_files -/' \
             '--gds-path[The gds folder path
 ]:gds-path:_gds-sync-download__option_gds_path_completion' \
+            '--write-script-path[Dont run this script, instead write it (along with the secrets) to a script
+]:write-script-path' \
             '--help[Show command help]' \
             '-h[Show command help]' \
             && ret=0

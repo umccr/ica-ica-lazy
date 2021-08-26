@@ -2,10 +2,10 @@
 
 # Generated with perl module App::Spec v0.013
 
-_gds-sync-download() {
+_ica-check-cwl-inputs() {
 
     COMPREPLY=()
-    local program=gds-sync-download
+    local program=ica-check-cwl-inputs
     local cur prev words cword
     _init_completion -n : || return
     declare -a FLAGS
@@ -16,21 +16,12 @@ _gds-sync-download() {
     MYWORDS=("${words[@]:1:$cword}")
 
     FLAGS=('--help' 'Show command help' '-h' 'Show command help')
-    OPTIONS=('--download-path' 'The directory you would like to download to
-' '--gds-path' 'The gds folder path
-' '--write-script-path' 'Dont run this script, instead write it (along with the secrets) to a script
-')
-    __gds-sync-download_handle_options_flags
+    OPTIONS=('--input-json The WES launch input json' '')
+    __ica-check-cwl-inputs_handle_options_flags
 
     case ${MYWORDS[$INDEX-1]} in
-      --download-path)
-        compopt -o dirnames
-        return
-      ;;
-      --gds-path)
-        _gds-sync-download__option_gds_path_completion
-      ;;
-      --write-script-path)
+      --input-json The WES launch input json)
+        _ica-check-cwl-inputs__option_input_json_The_WES_launch_input_json_completion
       ;;
 
     esac
@@ -43,7 +34,7 @@ _gds-sync-download() {
 
 }
 
-_gds-sync-download_compreply() {
+_ica-check-cwl-inputs_compreply() {
     local prefix=""
     cur="$(printf '%q' "$cur")"
     IFS=$'\n' COMPREPLY=($(compgen -P "$prefix" -W "$*" -- "$cur"))
@@ -56,13 +47,13 @@ _gds-sync-download_compreply() {
     fi
 }
 
-_gds-sync-download__option_gds_path_completion() {
+_ica-check-cwl-inputs__option_input_json_The_WES_launch_input_json_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_gds_path="$(gds-ls "${CURRENT_WORD}")"
-    _gds-sync-download_compreply "$param_gds_path"
+    local param_input_json_The_WES_launch_input_json="$(find $PWD -name '*.json')"
+    _ica-check-cwl-inputs_compreply "$param_input_json_The_WES_launch_input_json"
 }
 
-__gds-sync-download_dynamic_comp() {
+__ica-check-cwl-inputs_dynamic_comp() {
     local argname="$1"
     local arg="$2"
     local name desc cols desclength formatted
@@ -94,10 +85,10 @@ __gds-sync-download_dynamic_comp() {
             comp+=("'$name'")
         fi
     done <<< "$arg"
-    _gds-sync-download_compreply ${comp[@]}
+    _ica-check-cwl-inputs_compreply ${comp[@]}
 }
 
-function __gds-sync-download_handle_options() {
+function __ica-check-cwl-inputs_handle_options() {
     local i j
     declare -a copy
     local last="${MYWORDS[$INDEX]}"
@@ -124,7 +115,7 @@ function __gds-sync-download_handle_options() {
     MYWORDS=("${copy[@]}" "$last")
 }
 
-function __gds-sync-download_handle_flags() {
+function __ica-check-cwl-inputs_handle_flags() {
     local i j
     declare -a copy
     local last="${MYWORDS[$INDEX]}"
@@ -150,9 +141,9 @@ function __gds-sync-download_handle_flags() {
     MYWORDS=("${copy[@]}" "$last")
 }
 
-__gds-sync-download_handle_options_flags() {
-    __gds-sync-download_handle_options
-    __gds-sync-download_handle_flags
+__ica-check-cwl-inputs_handle_options_flags() {
+    __ica-check-cwl-inputs_handle_options
+    __ica-check-cwl-inputs_handle_flags
 }
 
 __comp_current_options() {
@@ -175,7 +166,7 @@ __comp_current_options() {
           local desc="${OPTIONS[$j+1]}"
           options_spec+="$name"$'\t'"$desc"$'\n'
       done
-      __gds-sync-download_dynamic_comp 'options' "$options_spec"
+      __ica-check-cwl-inputs_dynamic_comp 'options' "$options_spec"
 
       return 1
     else
@@ -184,5 +175,5 @@ __comp_current_options() {
 }
 
 
-complete -o default -F _gds-sync-download gds-sync-download
+complete -o default -F _ica-check-cwl-inputs ica-check-cwl-inputs
 
