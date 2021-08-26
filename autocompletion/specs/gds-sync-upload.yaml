@@ -15,3 +15,7 @@ options:
     completion:
       command_string: |-
         gds-ls "${CURRENT_WORD}"
+  - name: write-script-path
+    summary: |
+      Dont run this script, instead write it (along with the secrets) to a script
+    type: string

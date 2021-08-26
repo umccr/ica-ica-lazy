@@ -283,6 +283,27 @@ elif [[ -z "${base_url}" ]]; then
   print_help
   exit 1
 fi
+
+# Check arguments have a logical value
+# We might have set a boolean parameter over a kwarg parameter
+if [[ "${gds_path}" =~ ^--.* ]]; then
+  echo_stderr "Incorrect usage"
+  print_help
+  exit 1
+fi
+
+if [[ "${download_path}" =~ ^--.* ]]; then
+  echo_stderr "Incorrect usage"
+  print_help
+  exit 1
+fi
+
+if [[ "${write_script_path}" =~ ^--.* ]]; then
+  echo_stderr "Incorrect usage"
+  print_help
+  exit 1
+fi
+
 check_download_path "${download_path}"
 
 # Now run the aws s3 sync command through eval to quote the necessary arguments
@@ -294,7 +315,7 @@ gds_folder_path="$(get_folder_path_from_gds_path "${gds_path}")"
 folder_id="$(get_folder_id "${gds_volume}" "${gds_folder_path}" "${access_token}" "${base_url}")"
 
 # Check folder id is found
-if [[ -z "${folder_id}" ]]; then
+if [[ -z "${folder_id}" || "${folder_id}" == "null" ]]; then
   echo_stderr "Could not get folder id for \"${gds_path}\""
   exit 1
 fi

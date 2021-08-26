@@ -312,6 +312,28 @@ elif [[ -z "${base_url}" ]]; then
   exit 1
 fi
 
+# Check mandatory args have a logical value
+# Check arguments have a logical value
+# We might have set a boolean parameter over a kwarg parameter
+if [[ "${gds_path}" =~ ^--.* ]]; then
+  echo_stderr "Incorrect usage"
+  print_help
+  exit 1
+fi
+
+if [[ "${src_path}" =~ ^--.* ]]; then
+  echo_stderr "Incorrect usage"
+  print_help
+  exit 1
+fi
+
+if [[ "${write_script_path}" =~ ^--.* ]]; then
+  echo_stderr "Incorrect usage"
+  print_help
+  exit 1
+fi
+
+
 check_src_path "${src_path}"
 
 # Strip base url
@@ -337,11 +359,11 @@ gds_folder_name="$(get_folder_name_from_folder_path "${gds_folder_path}")"
 folder_id="$(get_folder_id "${gds_volume}" "${gds_folder_path}" "${access_token}" "${base_url}")"
 
 # Check folder exists
-if [[ -z "${folder_id}" ]]; then
+if [[ -z "${folder_id}" || "${folder_id}" == "null" ]]; then
   echo_stderr "Creating the gds folder \"${gds_path}\""
   folder_id="$(create_gds_folder "${gds_volume}" "${gds_folder_parent}" "${gds_folder_name}" "${access_token}" "${base_url}")"
   # Now re-check folder was created successfully
-  if [[ -z "${folder_id}"  ]]; then
+  if [[ -z "${folder_id}" || "${folder_id}" == "null"  ]]; then
     echo_stderr "Creation of folder \"gds://${gds_volume}${gds_folder_path}\" failed"
     exit 1
   fi
