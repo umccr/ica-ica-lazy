@@ -29,6 +29,110 @@ flatten_inputs(){
        .[]' <<< "$1"
 }
 
+get_definition_from_ica(){
+  : '
+  Use curl to pull down the packed cwl defintion of the workflow
+  '
+
+  local ica_workflow_id="$1"
+  local ica_workflow_version_name="$2"
+  local ica_base_url="$3"
+  local ica_access_token="$4"
+  curl \
+    --silent \
+    --request GET \
+    --header "Authorization: Bearer ${ica_access_token}" \
+    "${ica_base_url}/v1/workflows/${ica_workflow_id}/versions/${ica_workflow_version_name}" |
+  jq \
+    --raw-output \
+    '.definition | fromjson'
+}
+
+get_inputs_from_cwl_definition(){
+  : '
+    Get the inputs objects from the cwl definition object
+    First we split by type packed workflows use graphs and
+    have the inputs in the last element of the graph array
+    commandlinetools just have the inputs in the top key
+    we then strip out the "#" from the id.
+    if the "id" is not set on the on the cwltool it will have a "main/" prefix, which we strip out
+  '
+
+  local packed_cwl_definition="$1"
+
+  jq --raw-output '(
+         if (.["$graph"] | length) !=0 then
+             .["$graph"][-1]
+         else
+             .
+         end) |
+         .inputs[]' <<< "${packed_cwl_definition}"
+}
+
+get_input_block_from_input_name(){
+  : '
+  Get the input chunk from the input name - matches on id
+  '
+  # Get inputs
+  local input_name="$1"
+  local input_json="$2"
+
+  jq --raw-output \
+    --arg input_name "${input_name}" \
+    'select(.id == ("#" + $input_name) or .id == ("#/main" + $input_name))' <<< "${input_json}"
+}
+
+is_input_required(){
+  : '
+  Given an input chunk, determine it is required
+  echo "false" if not required
+  echo "true" if required
+  '
+  # Get inputs
+  local input_chunk="$1"
+
+  # Input is optional if type attribute is an array and "null" is in the type array
+  jq --raw-output \
+      'if ((.type | type == "array") and (.type | any("null"))) then
+          "false"
+      else
+          "true"
+      end' <<< "${input_chunk}"
+}
+
+get_id_from_input_chunk(){
+  : '
+  Given an input collect the id and remove the "#" and the "/main" attributes
+  '
+  local input_chunk="$1"
+
+  jq --raw-output \
+    '.id | sub("^#"; "") | sub("^main/"; "")' <<< "${input_chunk}"
+
+}
+
+get_required_inputs_list(){
+  : '
+  Get a chunk of inputs that are required for the workflow
+  '
+
+  # Use nameref
+  local -n temp_required_inputs_array="$1"
+  local input_json="$2"
+  local input_chunks_array
+  local input_id
+
+  readarray -t input_chunks_array < <(jq --raw-output --compact-output <<< "${input_json}")
+
+  # Iterate over the input ids, if input is required, then append the id to true
+  for input_chunk in "${input_chunks_array[@]}"; do
+    input_id="$(get_id_from_input_chunk "${input_chunk}")"
+    if [[ "$(is_input_required "${input_chunk}")" == "true" ]]; then
+      temp_required_inputs_array+=("${input_id}")
+    fi
+  done
+}
+
 get_sed_command(){
   if [[ "${OSTYPE}" == "darwin"* ]]; then
     echo "gsed"
@@ -154,6 +258,14 @@ get_class_type(){
   done <<< "${flattened_inputs}"
 }
 
+strip_first_period(){
+  : '
+  Equivalent of split(".", 1)[0] in python
+  '
+  local input_key="$1"
+  cut -d'.' -f1 <<< "${input_key}"
+}
+
 strip_last_period(){
   : '
   Equivalent of rsplit(".", 1)[0] in python
@@ -164,23 +276,135 @@ strip_last_period(){
   "$(get_sed_command)" -r "s/(.*)\.(.*)/\1/" <<< "${input_key}"
 }
 
+delete_item_from_array(){
+  : '
+  Delete an item from array
+  '
+  local -n input_array="$1"
+  local input_value="$2"
+  local input_del_array=( "${input_value}" )
+
+  for target in "${input_del_array[@]}"; do
+    for i in "${!input_array[@]}"; do
+      if [[ "${input_array[${i}]}" == "${target}" ]]; then
+        unset "input_array[${i}]"
+      fi
+    done
+  done
+}
+
 check_name_value(){
   : '
   Check name value
   '
   local name_value="$1"
 
-  if [[ "${name_value}" =~ [^a-zA-Z0-9_-] ]]; then
+  if [[ "${name_value}" =~ [^a-zA-Z0-9_-\.] ]]; then
     echo_stderr "Name must be a-zA-Z0-9_-, please don't put in spaces or symbols"
     return 1
   fi
 }
+
+check_input_paths_and_locations(){
+  : '
+  Iterate through inputs, make sure each gds path exists in this context
+  '
+  local flattened_inputs="$1"
+  local ica_workflow_inputs="$2"
+  local ica_base_url="$3"
+  local ica_access_token="$4"
+  local original_required_inputs_array_length
+  local all_there=0  # Is everything present?
+  local input_key
+  local input_key_lstripped
+  local input_key_rstripped
+  local input_value
+  local input_block
+  # Assigned in get_required_inputs_list
+  # Uses some nameref magic as shown here: https://stackoverflow.com/questions/10582763/how-to-return-an-array-in-bash-without-using-globals
+  local required_inputs_array
+
+  # Get required array
+  if [[ -n "${ica_workflow_inputs}" ]]; then
+    get_required_inputs_list required_inputs_array "${ica_workflow_inputs}"
+    original_required_inputs_array_length="${#required_inputs_array[@]}"
+  fi
+
+  echo_stderr "Ensuring that all required inputs are present: " "${required_inputs_array[@]}"
+
+  # Iterate through key val pairs
+  # Like tumor_fastq_list_rows.0.read_1.location=gds://...
+  while read -r input_key_val_pair; do
+     # Split into keys and values
+     input_key="$(cut -d'=' -f1 <<< "${input_key_val_pair}")"
+     # Stripp input key to just get first elmeent umccrise_tsv_rows.0.sv_vcf.path to umccrise_tsv_rows
+     input_key_lstripped="$(strip_first_period "${input_key}")"
+     # Stripped input key umccrise_tsv_rows.0.sv_vcf.path to just umccrise_tsv_rows.0.sv_vcf
+     input_key_rstripped="$(strip_last_period "${input_key}")"
+     input_value="$(cut -d'=' -f2 <<< "${input_key_val_pair}")"
+
+     # Check if is part of the inputs?
+     if [[ -n "${ica_workflow_inputs}" ]]; then
+       input_block="$(get_input_block_from_input_name "${input_key_lstripped}" "${ica_workflow_inputs}")"
+
+       # Check input block is present
+       if [[ -z "${input_block}" ]]; then
+         echo_stderr "Error! '${input_key}' is not a recognised input of the workflow"
+         all_there=1
+       fi
+
+       # Remove an element from the array
+       # As shown here: https://stackoverflow.com/questions/16860877/remove-an-element-from-a-bash-array
+       delete_item_from_array required_inputs_array "${input_key_lstripped}"
+     fi
+
+     # Check if the input-key ends in .path or .location
+     if [[ "${input_key}" =~ .*\.path || "${input_key}" =~ .*\.location ]]; then
+       # Get class type
+       class_type="$(get_class_type "${input_key_rstripped}" "${flattened_inputs}")"
+
+       # If a directory, make sure it exists
+       if [[ "${class_type}" == "gds_directory" ]]; then
+         echo_stderr "Input '${input_key}' is a gds directory at '${input_value}', checking it's present."
+         if ! check_folder_exists "${input_key_rstripped}" "${input_value}" "${ica_access_token}" "${ica_base_url}"; then
+           echo_stderr "Error! Could not find gds directory '${input_value}' for input '${input_key_rstripped}'"
+           all_there=1
+         fi
+       # If a file, make sure it exists
+       elif [[ "${class_type}" == "gds_file" ]]; then
+        echo_stderr "Input '${input_key}' is a gds file at '${input_value}' checking it's present."
+         if ! check_file_exists "${input_key_rstripped}" "${input_value}" "${ica_access_token}" "${ica_base_url}"; then
+           echo_stderr "Error! Could not find gds file '${input_value}' for input '${input_key_rstripped}'"
+           all_there=1
+         fi
+       fi
+     fi
+  done <<< "${flattened_inputs}"
+
+  # Get length of the required input array
+  if [[ -n "${ica_workflow_inputs}" && "${original_required_inputs_array_length}" != 0 && "${#required_inputs_array[@]}" != "0" ]]; then
+    echo_stderr "Error! Some required inputs are not satisfied"
+    echo_stderr "Error! The following inputs could not be found in the input.json: " "${required_inputs_array[@]}"
+    return 1
+  fi
+
+  # Return 1 if not all inputs are present on gds otherwise return 0
+  if [[ "${all_there}" == 1 ]]; then
+    return 1
+  else
+    return 0
+  fi
+}
+
 
 check_input_value(){
   : '
   Check input value
   '
   local inputs="$1"
+  local ica_workflow_inputs="$2"
+  local ica_base_url="$3"
+  local ica_access_token="$4"
 
   # Check if inputs are null
   if [[ -z "${inputs}" || "${inputs}" == "null" ]]; then
@@ -188,9 +412,11 @@ check_input_value(){
     return 0
   fi
 
+  # Flatten input json into .dot format
   flattened_inputs="$(flatten_inputs "${inputs}")"
 
-  check_input_paths_and_locations "${flattened_inputs}" "${ICA_ACCESS_TOKEN}" "${ICA_BASE_URL}"
+  # Check paths are present on gds and match input ids in definition on ICA if ica_workflow_inputs is defined
+  check_input_paths_and_locations "${flattened_inputs}" "${ica_workflow_inputs}" "${ica_base_url}" "${ica_access_token}"
 }
 
 check_engine_parameters(){
@@ -198,8 +424,6 @@ check_engine_parameters(){
   Check the engine parameters
   '
   local engine_parameters="$1"
-
-  echo_stderr "$(jq 'keys | length' <<< "${engine_parameters}")"
 
   # Check if inputs are null
   if [[ -z "${engine_parameters}" || "${engine_parameters}" == "null" || "$(jq 'keys | length' <<< "${engine_parameters}")" == "0" ]]; then
@@ -210,65 +434,22 @@ check_engine_parameters(){
   return 0
 }
 
-check_input_paths_and_locations(){
-  : '
-  Iterate through inputs, make sure each gds path exists in this context
-  '
-  local flattened_inputs="$1"
-  local ica_access_token="$2"
-  local ica_base_url="$3"
-  local all_there=0  # Is everything present?
-
-  # Iterate through key val pairs
-  # Like tumor_fastq_list_rows.0.read_1.location=gds://...
-  while read -r input_key_val_pair; do
-     # Split into keys and values
-     input_key="$(cut -d'=' -f1 <<< "${input_key_val_pair}")"
-     input_value="$(cut -d'=' -f2 <<< "${input_key_val_pair}")"
-
-     # Stripped input key
-     input_key_stripped="$(strip_last_period "${input_key}")"
-
-     # Check if the input-key ends in .path or .location
-     if [[ "${input_key}" =~ .*\.path || "${input_key}" =~ .*\.location ]]; then
-       # Get class type
-       class_type="$(get_class_type "${input_key_stripped}" "${flattened_inputs}")"
-       if [[ "${class_type}" == "gds_directory" ]]; then
-         echo_stderr "Input '${input_key}' is a gds directory at '${input_value}', checking it's present"
-         if ! check_folder_exists "${input_key_stripped}" "${input_value}" "${ica_access_token}" "${ica_base_url}"; then
-           echo_stderr "Error! Could not find gds directory '${input_value}'"
-           all_there=1
-         else
-            echo_stderr "gds directory '${input_value}' exists!"
-         fi
-       elif [[ "${class_type}" == "gds_file" ]]; then
-        echo_stderr "Input '${input_key}' is a gds file at '${input_value}' checking it's present"
-         if ! check_file_exists "${input_key_stripped}" "${input_value}" "${ica_access_token}" "${ica_base_url}"; then
-           echo_stderr "Error! Could not find gds file '${input_value}'"
-           all_there=1
-         else
-            echo_stderr "gds file '${input_value}' exists!"
-         fi
-       fi
-     fi
-  done <<< "${flattened_inputs}"
-
-  if [[ "${all_there}" == 1 ]]; then
-    return 1
-  else
-    return 0
-  fi
-}
-
 print_help(){
   echo "
   Usage ica-check-cwl-inputs (--input-json <json-file>)
+                             [--ica-workflow-id <ica-workflow-id>]
+                             [--ica-workflow-version-name <ica-workflow-version-name>]
 
   Description:
-    Validates your input json and makes sure all inputs of type File and Directory are readable on GDS
+    Validates your input json and makes sure all inputs of type File and Directory are readable on GDS.
+
+    Given the --ica-workflow-id and --ica-workflow-version-name, one can also make sure that the input key names
+    match the ids of the ICA definition AND make sure all of the required inputs are present in the input json.
 
   Options:
     -i / --input-json: The input json file you wish to analyse
+    -w / --ica-workflow-id: The ICA workflow ID you would like to check against
+    -v / --ica-workflow-version-name: The ICA workflow version name you would like to check against.
 
   Requirements:
     * curl
@@ -288,12 +469,22 @@ print_help(){
 
 # Get args from the command line
 input_json=""
+ica_workflow_id=""
+ica_workflow_version_name=""
 
 # Get args from command line
 while [ $# -gt 0 ]; do
   case "$1" in
     -i | --input-json)
       input_json="$2"
+      shift 1
+      ;;
+    -w | --ica-workflow-id)
+      ica_workflow_id="$2"
+      shift 1
+      ;;
+    -v | --ica-workflow-version-name)
+      ica_workflow_version_name="$2"
       shift 1
       ;;
     -h | --help)
@@ -303,24 +494,6 @@ while [ $# -gt 0 ]; do
   esac
   shift 1
 done
-
-# Make sure input_json is defined and is a file
-if [[ -z "${input_json}" ]]; then
-  echo_stderr "Please specify --input-json"
-  print_help
-  exit 1
-elif [[ ! -f "${input_json}" ]]; then
-  echo_stderr "--input-json specified as ${input_json} but could not find file."
-  print_help
-  exit 1
-fi
-
-# Check json integrity
-if ! jq type "${input_json}" >/dev/null 2>&1; then
-  echo_stderr "Could not confirm input json '${input_json}' was a valid json"
-  print_help
-  exit 1
-fi
 
 # Check ICA_BASE_URL env var is set
 if [[ -z "${ICA_BASE_URL-}" ]]; then
@@ -336,6 +509,49 @@ if [[ -z "${ICA_ACCESS_TOKEN-}" ]]; then
   exit 1
 fi
 
+# Make sure input_json is defined and is a file
+if [[ -z "${input_json}" ]]; then
+  echo_stderr "Please specify --input-json"
+  print_help
+  exit 1
+elif [[ ! -f "${input_json}" ]]; then
+  echo_stderr "--input-json specified as ${input_json} but could not find file."
+  print_help
+  exit 1
+fi
+
+# Check either none or both of ica-workflow-id and ica-workflow-version-name are defined
+if [[ -n "${ica_workflow_id}" && -n "${ica_workflow_version_name}" ]]; then
+  echo_stderr "--ica-workflow-id and --ica-workflow-version-name are defined, getting inputs from definition"
+
+  # Get the definition
+  ica_workflow_definition="$(get_definition_from_ica "${ica_workflow_id}" "${ica_workflow_version_name}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}")"
+
+  # Check definition was pulled correctly
+  if [[ -z "${ica_workflow_definition}" || "${ica_workflow_definition}" == "null" ]]; then
+    echo_stderr "Error! Workflow ${ica_workflow_id}/${ica_workflow_version_name} could not be found"
+    echo_stderr "Are you sure the id and version are correct and you're in the correct project context?"
+    exit 1
+  fi
+
+  # Get the inputs from the definition
+  ica_workflow_inputs="$(get_inputs_from_cwl_definition "${ica_workflow_definition}")"
+
+# Both aren't defined, make sure user hasn't tried to use one of them
+elif [[ ( -z "${ica_workflow_id}" && -n "${ica_workflow_version_name}" ) || ( -n "${ica_workflow_id}" && -z "${ica_workflow_version_name}" ) ]]; then
+  echo_stderr "You must define none or both of --ica-workflow-id and --ica-workflow-version-name"
+  print_help
+  exit 1
+
+fi
+
+# Check json integrity
+if ! jq type "${input_json}" >/dev/null 2>&1; then
+  echo_stderr "Could not confirm input json '${input_json}' was a valid json"
+  print_help
+  exit 1
+fi
+
 # Check name attribute
 echo_stderr "Checking name attribute is present"
 name_value="$(jq --raw-output '.name' "${input_json}")"
@@ -346,7 +562,7 @@ echo_stderr "Name value is good"
 
 echo_stderr "Checking input is present"
 input_value="$(jq --raw-output '.input' "${input_json}")"
-if ! check_input_value "${input_value}"; then
+if ! check_input_value "${input_value}" "${ica_workflow_inputs-}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"; then
   exit 1
 fi
 echo_stderr "Input is good"
