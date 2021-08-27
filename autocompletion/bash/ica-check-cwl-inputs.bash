@@ -16,12 +16,20 @@ _ica-check-cwl-inputs() {
     MYWORDS=("${words[@]:1:$cword}")
 
     FLAGS=('--help' 'Show command help' '-h' 'Show command help')
-    OPTIONS=('--input-json The WES launch input json' '')
+    OPTIONS=('--input-json' 'The WES launch input json
+' '--ica-workflow-id' 'The ica workflow id you wish to check inputs against
+' '--ica-workflow-version-name' 'The ica workflow version name you wish to check inputs against
+')
     __ica-check-cwl-inputs_handle_options_flags
 
     case ${MYWORDS[$INDEX-1]} in
-      --input-json The WES launch input json)
-        _ica-check-cwl-inputs__option_input_json_The_WES_launch_input_json_completion
+      --input-json)
+        _ica-check-cwl-inputs__option_input_json_completion
+      ;;
+      --ica-workflow-id)
+        _ica-check-cwl-inputs__option_ica_workflow_id_completion
+      ;;
+      --ica-workflow-version-name)
       ;;
 
     esac
@@ -47,10 +55,20 @@ _ica-check-cwl-inputs_compreply() {
     fi
 }
 
-_ica-check-cwl-inputs__option_input_json_The_WES_launch_input_json_completion() {
+_ica-check-cwl-inputs__option_input_json_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_input_json_The_WES_launch_input_json="$(find $PWD -name '*.json')"
-    _ica-check-cwl-inputs_compreply "$param_input_json_The_WES_launch_input_json"
+    local param_input_json="$(find $PWD -name '*.json')"
+    _ica-check-cwl-inputs_compreply "$param_input_json"
+}
+_ica-check-cwl-inputs__option_ica_workflow_id_completion() {
+    local CURRENT_WORD="${words[$cword]}"
+    local param_ica_workflow_id="$(curl \
+  --silent \
+  --request GET \
+  --header "Authorization: Bearer $ICA_ACCESS_TOKEN" \
+  "$ICA_BASE_URL/v1/workflows/?pageSize=1000" | \
+jq --raw-output '.items[] | .id')"
+    _ica-check-cwl-inputs_compreply "$param_ica_workflow_id"
 }
 
 __ica-check-cwl-inputs_dynamic_comp() {

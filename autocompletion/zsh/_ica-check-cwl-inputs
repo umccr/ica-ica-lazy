@@ -10,7 +10,12 @@ _ica-check-cwl-inputs() {
 
         # ---- Command: 
         _arguments -s  \
-            '--input-json The WES launch input json[]:input-json The WES launch input json:_ica-check-cwl-inputs__option_input_json_The_WES_launch_input_json_completion' \
+            '--input-json[The WES launch input json
+]:input-json:_ica-check-cwl-inputs__option_input_json_completion' \
+            '--ica-workflow-id[The ica workflow id you wish to check inputs against
+]:ica-workflow-id:_ica-check-cwl-inputs__option_ica_workflow_id_completion' \
+            '--ica-workflow-version-name[The ica workflow version name you wish to check inputs against
+]:ica-workflow-version-name' \
             '--help[Show command help]' \
             '-h[Show command help]' \
             && ret=0
@@ -19,11 +24,23 @@ _ica-check-cwl-inputs() {
 
 }
 
-_ica-check-cwl-inputs__option_input_json_The_WES_launch_input_json_completion() {
+_ica-check-cwl-inputs__option_input_json_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
     IFS=$'\n' __dynamic_completion=( $( find $PWD -name '*.json' ) )
-    compadd -X "input_json_The_WES_launch_input_json:" $__dynamic_completion
+    compadd -X "input_json:" $__dynamic_completion
+}
+_ica-check-cwl-inputs__option_ica_workflow_id_completion() {
+    local __dynamic_completion
+    local CURRENT_WORD="$words[CURRENT]"
+    IFS=$'\n' __dynamic_completion=( $( curl \
+  --silent \
+  --request GET \
+  --header "Authorization: Bearer $ICA_ACCESS_TOKEN" \
+  "$ICA_BASE_URL/v1/workflows/?pageSize=1000" | \
+jq --raw-output '.items[] | .id'
+ ) )
+    compadd -X "ica_workflow_id:" $__dynamic_completion
 }
 
 __ica-check-cwl-inputs_dynamic_comp() {
