@@ -359,6 +359,12 @@ folder_path="$(get_folder_path_from_gds_path "${gds_path}")"
 # replace literal * with \\S
 name="${name//\*/\\S+}"
 
+# replace literal . with \\.
+name="${name//\./\\.}"
+
+# Place literal '^' at start and '$' at end of name
+name="^${name}\$"
+
 if ! check_path_is_folder "${volume_name}" "${folder_path}"; then
   echo_stderr "Could not find directory '${gds_path}'"
   exit 1
