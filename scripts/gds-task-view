@@ -22,7 +22,7 @@ print_help(){
             -b / --browser: Show in browser
 
         Requirements:
-          * docker
+          * docker | podman
           * jq
           * python3
           * wget
@@ -32,6 +32,14 @@ print_help(){
           * ICA_ACCESS_TOKEN
           * BROWSER (only if --browser is set)
   "
+}
+
+get_docker_binary(){
+  if type docker 1>/dev/null 2>&1; then
+    echo "docker"
+  else
+    echo "podman"
+  fi
 }
 
 # Functions
@@ -49,11 +57,11 @@ get_task_log_file(){
     --request GET \
     --header "Authorization: Bearer ${access_token}" \
     "${base_url}/v1/tasks/runs/${task_id}" | \
-  docker run \
+  "$(get_docker_binary)" run \
     --rm \
     --interactive \
     --entrypoint jq \
-    umccr/alpine-jq:latest \
+    "quay.io/umccr/alpine-jq:1.6" \
       --arg "log_file_key" "${log_file_key}" \
       --raw-output \
       '.logs[] | .[$log_file_key]'

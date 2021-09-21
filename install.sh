@@ -24,7 +24,7 @@ You should have the following applications installed before continuing:
 
 * aws
 * curl
-* docker
+* docker | podman
 * jq
 * pass
 * python3
@@ -39,6 +39,14 @@ echo_stderr() {
 
 print_help() {
   echo_stderr "${help_message}"
+}
+
+get_docker_binary(){
+  if type docker 1>/dev/null 2>&1; then
+    echo "docker"
+  else
+    echo "podman"
+  fi
 }
 
 
@@ -65,7 +73,7 @@ binaries_check(){
   : '
   Check each of the required binaries are available
   '
-  if ! (type aws curl docker jq pass python3 rsync 1>/dev/null); then
+  if ! (type "$(get_docker_binary)" aws curl jq pass python3 rsync 1>/dev/null); then
     return 1
   fi
 }

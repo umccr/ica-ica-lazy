@@ -14,6 +14,14 @@ echo_stderr(){
   echo "$@" 1>&2
 }
 
+get_docker_binary(){
+  if type docker 1>/dev/null 2>&1; then
+    echo "docker"
+  else
+    echo "podman"
+  fi
+}
+
 print_help(){
   echo "
         Usage: gds-view ( --gds-path gds://volume-name/path-to-file ) [ --to-stdout | --browser ]
@@ -24,7 +32,7 @@ print_help(){
             -b / --browser: Open url in browser
 
         Requirements:
-          * docker
+          * docker | podman
           * jq
           * python3
           * wget
@@ -87,8 +95,9 @@ get_epoch_expiry(){
   local access_token="$1"
   echo "${access_token}" | \
     "$(get_sed_command)" -r 's/^(\S+)\.(\S+)\.(\S+)$/\2/' | \
-    base64 -d 2>/dev/null | \
+    ( base64 -d 2>/dev/null || true ) | \
     jq -r '.exp'
+
 }
 
 get_seconds_to_expiry(){
@@ -105,13 +114,13 @@ warn_time_to_expiry(){
   '
   local expiry_in_seconds="$1"
 
-  python3 -c "from datetime import timedelta; \
+  python3 -c "from datetime import timedelta; from sys import stderr; \
               time_to_expiry=timedelta(seconds=${expiry_in_seconds}); \
               d = {'days': time_to_expiry.days}; \
               d['hours'], rem = divmod(time_to_expiry.seconds, 3600); \
               d['minutes'], d['seconds'] = divmod(rem, 60); \
               print('Expired') if ${expiry_in_seconds} < 0 \
-              else print(f\"Warning: Your ica access token will end in {d['days']} days, {d['hours']} hours, {d['minutes']} minutes, {d['seconds']} seconds\")"
+              else print(f\"Warning: Your ica access token will end in {d['days']} days, {d['hours']} hours, {d['minutes']} minutes, {d['seconds']} seconds\", file=stderr)"
 }
 
 ## Checkers
@@ -204,11 +213,11 @@ run_links(){
   '
   local presigned_url="$1"
   # Send through to links
-  docker run \
+  "$(get_docker_binary)" run \
     --rm \
     -it \
     --entrypoint "links" \
-    umccr/alpine-links:latest \
+    quay.io/umccr/alpine-links:2.21 \
     	"${presigned_url}"
 }
 
@@ -221,8 +230,10 @@ if [[ -z "${access_token}" ]]; then
 elif [[ -z "${base_url}" ]]; then
   echo_stderr "Error: Please set the env var ICA_BASE_URL"
   print_help
-  exit 1# Check token expiry
-check_token_expiry "${access_token}"
+  exit 1
+else
+  # Check token expiry
+  check_token_expiry "${access_token}"
 fi
 
 

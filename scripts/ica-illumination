@@ -31,7 +31,7 @@ print_help(){
 
   Requirements:
     * jq
-    * docker
+    * docker | podman
     * sed (gsed for MacOS users)
   "
 }
@@ -44,14 +44,24 @@ get_sed_command(){
   fi
 }
 
+get_docker_binary(){
+  if type docker 1>/dev/null 2>&1; then
+    echo "docker"
+  else
+    echo "podman"
+  fi
+}
+
 get_epoch_expiry(){
   : '
   Get the epoch value of the expiry date of the tokens
   '
   local access_token="$1"
+
   echo "${access_token}" | \
     "$(get_sed_command)" -r 's/^(\S+)\.(\S+)\.(\S+)$/\2/' | \
-    base64 -d 2>/dev/null | \
+    ( base64 \
+        --decode 2>/dev/null || true ) | \
     jq -r '.exp'
 }
 
@@ -80,11 +90,15 @@ check_port_not_in_use(){
       exit 1
     fi
 
-    # Check if port is in use
-    if [[ "$(docker ps --filter publish="${port}" --quiet | wc -l)" == 0 ]]; then
+    # Check if port is in use - podman doesn't support the --publish filter
+    if [[ "$(get_docker_binary)" == "docker" && "$(docker ps --filter publish="${port}" --quiet | wc -l)" == 0 ]]; then
+      # Port not in use!
+      break
+    elif [[ "$(get_docker_binary)" == "podman" && "$(podman ps --format "{{.Ports}}" | sed -r 's%^[0-9|\.]+\:([0-9]+)->[0-9]+\/tcp$%\1%' | grep -c "^${port}$")" == 0 ]]; then
       # Port not in use!
       break
     fi
+
     # Iterate port by one
     echo_stderr "Port ${port} in use, trying $(("${port}" + 1))"
     port="$(("${port}" + 1))"
@@ -99,13 +113,13 @@ warn_time_to_expiry(){
   '
   local expiry_in_seconds="$1"
 
-  python3 -c "from datetime import timedelta; \
+  python3 -c "from datetime import timedelta; from sys import stderr; \
               time_to_expiry=timedelta(seconds=${expiry_in_seconds}); \
               d = {'days': time_to_expiry.days}; \
               d['hours'], rem = divmod(time_to_expiry.seconds, 3600); \
               d['minutes'], d['seconds'] = divmod(rem, 60); \
               print('Expired') if ${expiry_in_seconds} < 0 \
-              else print(f\"Warning: Your ica access token will end in {d['days']} days, {d['hours']} hours, {d['minutes']} minutes, {d['seconds']} seconds\")"
+              else print(f\"Warning: Your ica access token will end in {d['days']} days, {d['hours']} hours, {d['minutes']} minutes, {d['seconds']} seconds\", file=stderr)"
 }
 
 ## Checkers
@@ -160,7 +174,7 @@ check_binaries(){
   : '
   Make sure that jq / docker binaries exists in PATH
   '
-  if ! (type docker jq "${sed_binary}" 1>/dev/null); then
+  if ! (type "$(get_docker_binary)" jq "${sed_binary}" 1>/dev/null); then
     return 1
   fi
 }
@@ -175,14 +189,14 @@ run_illumination_docker(){
 
   echo_stderr "Running illumination on port ${port}"
   # Run docker
-  docker run \
+  "$(get_docker_binary)" run \
     -it \
     --rm \
     --detach \
     --env "ICA_ACCESS_TOKEN=${ica_access_token}" \
     --env "PORT=${port}" \
     --publish "${port}:${port}" \
-    "umccr/illumination:latest"
+    "quay.io/umccr/illumination:latest"
 }
 
 # Inputs
@@ -214,7 +228,7 @@ fi
 
 # Check binaries
 if ! check_binaries; then
-  echo_stderr "Please make sure that jq and docker"
+  echo_stderr "Please make sure that jq and docker / podman are installed"
   exit 1
 fi
 
@@ -239,6 +253,7 @@ if [[ -z "${project_access_token}" || "${project_access_token}" == "null" ]]; th
   project_access_token="$(get_access_token "${project_name}" "admin" "${TOKENS_PATH}")"
 fi
 
+
 if [[ -z "${project_access_token}" || "${project_access_token}" == "null" ]]; then
   echo_stderr "Error: Could not get access token for project \"${project_name}\" with scope \"${DEFAULT_SCOPE}\""
   echo_stderr "Error: Please first run 'ica-add-access-token --project-name \"${project_name}\" --scope \"${DEFAULT_SCOPE}\""
@@ -249,7 +264,7 @@ fi
 check_token_expiry "${project_access_token}"
 
 # Check docker is running
-if ! docker ps >/dev/null; then
+if ! "$(get_docker_binary)" ps >/dev/null; then
   echo_stderr "Error: could not confirm that docker was running correctly, exiting"
   exit 1
 fi
@@ -268,7 +283,7 @@ fi
 echo_stderr "Docker launched Illumination successfully"
 echo_stderr "Please head to localhost://${port} on your preferred browser"
 
-docker_name="$(docker container inspect "${docker_id}" | jq --raw-output '.[0].Name' | "${sed_binary}" 's%^\/%%')"
+docker_name="$("$(get_docker_binary)" container inspect "${docker_id}" | jq --raw-output '.[0].Name' | "${sed_binary}" 's%^\/%%')"
 
 echo_stderr "To stop the container, please run 'docker kill \"${docker_name}\"'"
 

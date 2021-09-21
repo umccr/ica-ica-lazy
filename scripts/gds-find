@@ -66,7 +66,7 @@ get_epoch_expiry(){
   local access_token="$1"
   echo "${access_token}" | \
     "$(get_sed_command)" -r 's/^(\S+)\.(\S+)\.(\S+)$/\2/' | \
-    base64 -d 2>/dev/null | \
+    ( base64 -d 2>/dev/null || true ) | \
     jq -r '.exp'
 }
 
@@ -84,13 +84,13 @@ warn_time_to_expiry(){
   '
   local expiry_in_seconds="$1"
 
-  python3 -c "from datetime import timedelta; \
+  python3 -c "from datetime import timedelta; from sys import stderr; \
               time_to_expiry=timedelta(seconds=${expiry_in_seconds}); \
               d = {'days': time_to_expiry.days}; \
               d['hours'], rem = divmod(time_to_expiry.seconds, 3600); \
               d['minutes'], d['seconds'] = divmod(rem, 60); \
               print('Expired') if ${expiry_in_seconds} < 0 \
-              else print(f\"Warning: Your ica access token will end in {d['days']} days, {d['hours']} hours, {d['minutes']} minutes, {d['seconds']} seconds\")"
+              else print(f\"Warning: Your ica access token will end in {d['days']} days, {d['hours']} hours, {d['minutes']} minutes, {d['seconds']} seconds\", file=stderr)"
 }
 
 check_token_expiry(){
