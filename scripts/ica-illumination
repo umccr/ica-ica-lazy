@@ -265,7 +265,7 @@ check_token_expiry "${project_access_token}"
 
 # Check docker is running
 if ! "$(get_docker_binary)" ps >/dev/null; then
-  echo_stderr "Error: could not confirm that docker was running correctly, exiting"
+  echo_stderr "Error: could not confirm that $(get_docker_binary) was running correctly, exiting"
   exit 1
 fi
 
@@ -276,7 +276,7 @@ docker_id="$(run_illumination_docker "${project_access_token}" "${port}")"
 
 # Check id
 if [[ -z "${docker_id}" ]]; then
-  echo_stderr "Error: Could not get docker container id"
+  echo_stderr "Error: Could not get $(get_docker_binary) container id"
   exit 1
 fi
 
@@ -285,7 +285,7 @@ echo_stderr "Please head to localhost://${port} on your preferred browser"
 
 docker_name="$("$(get_docker_binary)" container inspect "${docker_id}" | jq --raw-output '.[0].Name' | "${sed_binary}" 's%^\/%%')"
 
-echo_stderr "To stop the container, please run 'docker kill \"${docker_name}\"'"
+echo_stderr "To stop the container, please run '$(get_docker_binary) kill \"${docker_name}\"'"
 
 if [[ -n "${BROWSER}" ]]; then
   echo_stderr "${BROWSER} environment variable is set. Opening up 'localhost://${port}'"
