@@ -1,0 +1,13 @@
+---
+name: gds-blame
+
+title: Link workflow runs to directories based on engine parameters
+
+options:
+  - name: gds-path
+    type: string
+    summary: |
+      The gds folder path
+    completion:
+      command_string: |-
+        gds-ls "${CURRENT_WORD}"

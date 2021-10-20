@@ -1,0 +1,434 @@
+#!/usr/bin/env bash
+
+: '
+Given a gds path as input, return the workflow run id that created the directory and the user that launched the workflow.
+If thats not possible, just return the user that created directory, and when they created it
+'
+
+# Set to fail
+set -euo pipefail
+
+# Globals
+MAX_PAGE_SIZE=200
+SECONDS_PER_WEEK="604800"
+
+# Help function
+print_help(){
+  echo "
+        Usage: gds-blame (--gds-path gds://volume-name/path-to-folder/)
+
+        Options:
+            -g / --gds-path:  Required - Path to gds directory
+
+        Requirements:
+          * jq     (v1.5+)
+          * python3 (v3.4+)
+          * curl
+
+        Environment:
+          * ICA_BASE_URL
+          * ICA_ACCESS_TOKEN
+        "
+}
+
+## Internal functions
+echo_stderr(){
+  echo "$@" 1>&2
+}
+
+binaries_check(){
+  : '
+  Check each of the required binaries are available
+  '
+  if ! (type jq python3 curl 1>/dev/null); then
+    return 1
+  fi
+}
+
+get_sed_command(){
+  if [[ "${OSTYPE}" == "darwin"* ]]; then
+    echo "gsed"
+  else
+    echo "sed"
+  fi
+}
+
+get_epoch_expiry(){
+  : '
+  Get the epoch value of the expiry date of the tokens
+  '
+  local access_token="$1"
+  echo "${access_token}" | \
+    "$(get_sed_command)" -r 's/^(\S+)\.(\S+)\.(\S+)$/\2/' | \
+    ( base64 -d 2>/dev/null || true ) | \
+    jq -r '.exp'
+}
+
+get_seconds_to_expiry(){
+  : '
+  Get seconds to expiry based on epoch time
+  '
+  local expiry_epoch="$1"
+  bc <<< "${expiry_epoch} - $(date +%s)"
+}
+
+warn_time_to_expiry(){
+  : '
+  Convert the epoch time to expiry to a readable date format
+  '
+  local expiry_in_seconds="$1"
+
+  python3 -c "from datetime import timedelta; from sys import stderr; \
+              time_to_expiry=timedelta(seconds=${expiry_in_seconds}); \
+              d = {'days': time_to_expiry.days}; \
+              d['hours'], rem = divmod(time_to_expiry.seconds, 3600); \
+              d['minutes'], d['seconds'] = divmod(rem, 60); \
+              print('Expired') if ${expiry_in_seconds} < 0 \
+              else print(f\"Warning: Your ica access token will end in {d['days']} days, {d['hours']} hours, {d['minutes']} minutes, {d['seconds']} seconds\", file=stderr)"
+}
+
+get_parent_path(){
+  : '
+  Take the path input as a python lib and then return the parent (with a trailing slash)
+  '
+
+  local gds_path_attr="$1"
+
+  python3 -c "from pathlib import Path; print(str(Path(\"${gds_path_attr}\").parent).rstrip(\"/\") + \"/\")"
+}
+
+check_volume(){
+  : '
+  Confirm the volume exists
+  '
+  local volume_name="$1"
+
+  if ! curl \
+         --silent \
+         --location \
+         --fail \
+         --request GET \
+         --header 'Accept: application/json' \
+         --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+         --url "${ICA_BASE_URL}/v1/volumes/${volume_name}" \
+         --get >/dev/null 2>&1; then
+    return 1
+  else
+    return 0
+  fi
+}
+
+check_token_expiry(){
+  : '
+  Return the expiry in printable format
+  '
+  # Inputs
+  local access_token="$1"
+
+  # local vars
+  local epoch_expiry
+  local seconds_to_expiry
+
+  # Get the JWT token expiry time
+  epoch_expiry="$(get_epoch_expiry "${access_token}")"
+
+  # Compare expiry to current time
+  seconds_to_expiry="$(get_seconds_to_expiry "${epoch_expiry}")"
+
+  # Check token expiry
+  if [[ "${seconds_to_expiry}" -le 0 ]]; then
+    # Token has expired
+    echo_stderr "Error - Your access token has expired! Please refresh with 'ica-add-access-token'"
+    exit 1
+  elif [[ "${seconds_to_expiry}" -le "${SECONDS_PER_WEEK}" ]]; then
+    # Warn user token expires in less than a week
+    echo_stderr "$(warn_time_to_expiry "${seconds_to_expiry}")"
+  fi
+}
+
+# Get volume from gds path
+get_volume_from_gds_path() {
+  : '
+  Assumes urllib is available on python3
+  '
+  local gds_path="$1"
+
+  # Returns the netloc attribute of the gds_path
+  python3 -c "from urllib.parse import urlparse; print(urlparse(\"${gds_path}\").netloc)"
+}
+
+# Get folder path
+get_folder_path_from_gds_path() {
+  : '
+  Assumes urllib is available on python3
+  '
+  local gds_path="$1"
+
+  # Returns the path attribute of gds_path input
+  python3 -c "from urllib.parse import urlparse; from pathlib import Path; print(str(Path(urlparse(\"${gds_path}\").path)).rstrip(\"/\") + \"/\")"
+}
+
+get_workflow_run_ids(){
+  : '
+  Get the list of workflow run ids
+  '
+  local response
+  local next_page_token
+  local url
+
+  # Initalise next_page_token
+  next_page_token="null"
+
+  while :; do
+    url="${ICA_BASE_URL}/v1/workflows/runs?status=succeeded&pageSize=${MAX_PAGE_SIZE}"
+    if [[ ! "${next_page_token}" == "null" ]]; then
+      url="${url}&pageToken=${next_page_token}"
+    fi
+    response="$(curl \
+      --silent \
+      --fail \
+      --location \
+      --request GET \
+      --header "Accept: application/json" \
+      --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+      --url "${url}")"
+
+    # Print existing items
+    jq --raw-output --compact-output '.items[] | .id' <<< "${response}"
+
+    # Assign token
+    next_page_token="$(jq -r '.nextPageToken' <<< "${response}")"
+
+    # Break if no more items
+    if [[ "${next_page_token}" == "null" ]]; then
+      break
+    fi
+  done
+}
+
+get_engine_parameters(){
+  : '
+  Use engine parameters to pull down the workflow
+  '
+  local ica_workflow_run_id="$1"
+  curl \
+    --silent \
+    --fail \
+    --location \
+    --request GET \
+    --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+    "${ICA_BASE_URL}/v1/workflows/runs/${ica_workflow_run_id}/?include=engineParameters" | \
+  jq \
+    --raw-output \
+    '.engineParameters | fromjson'
+}
+
+get_folder_id(){
+  : '
+  Check if the current path is a folder by first listing the folders in the parent path
+  and searching for this folder
+  '
+
+  local volume_name="$1"
+  local gds_path_attr="$2"
+  local data_params=( "--data" "volume.name=${volume_name}"
+                      "--data" "recursive=false"
+                      "--data" "pageSize=${MAX_PAGE_SIZE}" )
+
+  if [[ -z "${gds_path_attr}" || "${gds_path_attr}" == "/" ]]; then
+    # Check volume exists
+    if ! check_volume "${volume_name}"; then
+      return 1
+    else
+      return 0
+    fi
+  fi
+
+
+  if [[ -n "${gds_path_attr}" && "${gds_path_attr}" != "/" ]]; then
+    data_params+=( "--data" "path=$(get_parent_path "${gds_path_attr}")*" )
+  fi
+
+  if ! folders_obj="$(curl \
+                        --silent \
+                        --location \
+                        --fail \
+                        --request GET \
+                        --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+                        --url "${ICA_BASE_URL}/v1/folders" \
+                        --get \
+                        "${data_params[@]}" 2>/dev/null)"; then
+    return 1
+  fi
+
+  if [[ "$(jq \
+            --raw-output \
+            --arg "gds_path_attr" "${gds_path_attr}" \
+            '.items[] | select ( .path == $gds_path_attr ) | .path' <<< "${folders_obj}")" != "${gds_path_attr}" ]]; then
+      return 1
+  fi
+
+  jq \
+    --raw-output \
+    --arg "gds_path_attr" "${gds_path_attr}" \
+    '.items[] | select ( .path == $gds_path_attr ) | .id' <<< "${folders_obj}"
+}
+
+get_folder_creator_username(){
+  : '
+  Given the id of a folder, return the user name of the creator of that folder.
+  This is achieved by running a get on the folder path, followed by
+  a get on the createdBy id on the accounts api
+  '
+
+  local folder_id="$1"
+  local creator_account_id
+
+  creator_account_id="$(curl \
+                         --silent \
+                         --location \
+                         --fail \
+                         --request GET \
+                         --header "Accept: application/json" \
+                         --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+                         --url "${ICA_BASE_URL}/v1/folders/${folder_id}" | \
+                       jq \
+                         --raw-output \
+                         '.createdBy')"
+
+  # Use accounts endpoint with creator account id
+  curl \
+    --silent \
+    --location \
+    --fail \
+    --request GET \
+    --header "Accept: application/json" \
+    --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+    --url "${ICA_BASE_URL}/v1/accounts/${creator_account_id}" | \
+  jq \
+    --raw-output \
+    '.name'
+}
+
+create_workflow_run_summary_header(){
+  : '
+  Create the workflow run summary header
+  '
+  local has_match="$1"
+
+  if [[ "${has_match}" -ne "1" ]]; then
+    echo "There has been at least one run id linked to this directory:"
+  fi
+}
+
+# Get args
+gds_path=""
+
+# Get args from command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -g | --gds-path)
+      gds_path="$2"
+      shift 1
+      ;;
+    -h | --help)
+      print_help
+      exit 0
+      ;;
+  esac
+  shift 1
+done
+
+# Ensure gds_path param is set
+if [[ -z "${gds_path}" ]]; then
+  echo_stderr "Please make sure --gds-path parameter is set"
+  exit 1
+fi
+
+# Start
+if [[ -z "${ICA_BASE_URL-}" ]]; then
+    echo "Error: Need to set var \"ICA_BASE_URL\"" 1>&2
+    exit 1
+fi
+
+if [[ -z "${ICA_ACCESS_TOKEN-}" ]]; then
+    echo "Error: Need to set var \"ICA_ACCESS_TOKEN\"" 1>&2
+    echo "Error: Please first run ica-context-switcher" 1>&2
+    exit 1
+fi
+
+# Check token expiry
+check_token_expiry "${ICA_ACCESS_TOKEN}"
+
+# Get folder creator
+# Get volume path from gds path
+volume_name="$(get_volume_from_gds_path "${gds_path}")"
+folder_path="$(get_folder_path_from_gds_path "${gds_path}")"
+gds_path="gds://${volume_name}${folder_path}"  # Comes with trailing slash
+if ! folder_id="$(get_folder_id "${volume_name}" "${folder_path}")"; then
+  echo_stderr "Error: Directory '${gds_path}' does not exist."
+  exit 1
+fi
+# Show creator
+creator_username="$(get_folder_creator_username "${folder_id}")"
+
+echo "The directory '${gds_path}' was created by user '${creator_username}'"
+echo "Now checking if this directory was created by a workflow run."
+
+# Read the array of workflow ids
+readarray -t workflow_run_id_array < <(get_workflow_run_ids)
+
+# We only print the header of 'this directory was created by the following workflow run ids if one present'
+has_match=0
+
+# Iterate through workflow ids, print matches for workflow ids that have an output directory or work directory attribute
+# that are within the directory in question
+workflow_run_counter=0
+workflow_run_array_length="${#workflow_run_id_array[@]}"
+
+for workflow_run_id in "${workflow_run_id_array[@]}"; do
+  if [[ "$(( "${workflow_run_counter}" % "100" ))" == "0" && "${workflow_run_counter}" -ne "0" ]]; then
+    echo_stderr "Looked through $((workflow_run_counter)) out of ${workflow_run_array_length} runs"
+  fi
+  workflow_run_counter="$((workflow_run_counter + 1))"
+  # Get engine parameters
+  engine_parameters="$(get_engine_parameters "${workflow_run_id}")"
+
+  # Get directories
+  output_directory="$(jq --raw-output '.outputDirectory' <<< "${engine_parameters}")/"
+  working_directory="$(jq --raw-output '.workDirectory' <<< "${engine_parameters}")/"
+
+  # Now check if each directory is a subset
+  if [[ "${gds_path}" == "${output_directory}" ]]; then
+    create_workflow_run_summary_header "${has_match}"
+    has_match=1
+    echo "Input argument '${gds_path}' is the output directory of workflow '${workflow_run_id}'"
+  elif [[ "${gds_path}" == "${output_directory}"* ]]; then
+    create_workflow_run_summary_header "${has_match}"
+    has_match=1
+    echo "Workflow run '${workflow_run_id}' output directory is '${output_directory}' which is a parent of input argument '${gds_path}'"
+  elif [[ "${output_directory}" == "${gds_path}"* ]]; then
+    create_workflow_run_summary_header "${has_match}"
+    has_match=1
+    echo "Input argument '${gds_path}' is a parent of '${output_directory}' which is the output directory for run '${workflow_run_id}'"
+  fi
+
+  if [[ "${gds_path}" == "${working_directory}" ]]; then
+    create_workflow_run_summary_header "${has_match}"
+    has_match=1
+    echo "Input argument '${gds_path}' is the working directory of workflow: '${workflow_run_id}'"
+  elif [[ "${gds_path}" == "${working_directory}"* ]]; then
+    create_workflow_run_summary_header "${has_match}"
+    has_match=1
+    echo "Workflow run '${workflow_run_id}' working directory is '${working_directory}' which is a parent of input argument '${gds_path}'"
+  elif [[ "${working_directory}" == "${gds_path}"* ]]; then
+    create_workflow_run_summary_header "${has_match}"
+    has_match=1
+    echo "Input argument '${gds_path}' is a parent of '${working_directory}' which is the output directory for run '${workflow_run_id}'"
+  fi
+
+done
+
+if [[ "${has_match}" == "0" ]]; then
+  echo "Could not find a workflow run id that may have created this folder"
+fi
