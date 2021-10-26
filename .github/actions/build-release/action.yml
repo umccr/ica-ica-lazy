@@ -94,6 +94,10 @@ runs:
         rsync --archive \
           "functions/" "release-${{ inputs.git_tag }}/functions/"
 
+        # Add functions
+        rsync --archive \
+          "functions/" "release-${{ inputs.git_tag }}/internal-functions/"
+
         # Add autocompletions
         rsync --archive \
           "autocompletion/" "release-${{ inputs.git_tag }}/autocompletion/"
