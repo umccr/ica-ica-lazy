@@ -34,14 +34,6 @@ print_help(){
   "
 }
 
-get_docker_binary(){
-  if type docker 1>/dev/null 2>&1; then
-    echo "docker"
-  else
-    echo "podman"
-  fi
-}
-
 # Functions
 get_task_log_file(){
   : '
@@ -50,7 +42,8 @@ get_task_log_file(){
 
   local task_id="$1"
   local log_file_key="$2"
-  local access_token="$3"
+  local base_url="$3"
+  local access_token="$4"
 
   curl \
     --silent \
@@ -103,12 +96,27 @@ while [ $# -gt 0 ]; do
     shift
 done
 
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
 
 # Get log gds path
 if [[ "${print_stdout}" == "1" ]]; then
-  log_gds_path="$(get_task_log_file "${task_id}" "stdout" "${access_token}")"
+  log_gds_path="$(get_task_log_file "${task_id}" "stdout" "${base_url}" "${access_token}")"
 elif [[ "${print_stderr}" == "1" ]]; then
-  log_gds_path="$(get_task_log_file "${task_id}" "stderr" "${access_token}")"
+  log_gds_path="$(get_task_log_file "${task_id}" "stderr" "${base_url}" "${access_token}")"
 else
   echo "Error: Please specify -o/--stdout or -e/stderr to print" 1>&2
   print_help

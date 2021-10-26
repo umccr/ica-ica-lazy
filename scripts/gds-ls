@@ -10,128 +10,11 @@ This script does the following
 
 set -euo pipefail
 
-#########
-# GLOBALS
-#########
-
-MAX_PAGE_SIZE=1000
-SECONDS_PER_WEEK="604800"
-
 ###########
 # FUNCTIONS
 ###########
 
 ## Getters
-echo_stderr(){
-  echo "$@" 1>&2
-}
-
-get_volume_name(){
-  : '
-  Get the volume name from the gds path
-  '
-
-  # Function outputs
-  python3 -c "from urllib.parse import urlparse; print(urlparse(\"${gds_path}\").netloc)"
-}
-
-get_path(){
-  : '
-  Get the path attribute from the gds path
-  '
-
-  # Function outputs
-  python3 -c "from urllib.parse import urlparse; from pathlib import Path; print(str(Path(urlparse(\"${gds_path}\").path)).rstrip(\"/\") + \"/\")"
-
-}
-
-get_parent_path(){
-  : '
-  Take the path input as a python lib and then return the parent (with a trailing slash)
-  '
-
-  local gds_path_attr="$1"
-
-  python3 -c "from pathlib import Path; print(str(Path(\"${gds_path_attr}\").parent).rstrip(\"/\") + \"/\")"
-}
-
-get_sed_command(){
-  if [[ "${OSTYPE}" == "darwin"* ]]; then
-    echo "gsed"
-  else
-    echo "sed"
-  fi
-}
-
-get_epoch_expiry(){
-  : '
-  Get the epoch value of the expiry date of the tokens
-  '
-  local access_token="$1"
-  local epoch_expiry
-  epoch_expiry="$(echo "${access_token}" | \
-                  "$(get_sed_command)" -r 's/^(\S+)\.(\S+)\.(\S+)$/\2/' | \
-                  ( base64 -d 2>/dev/null || true ) | \
-                  jq -r '.exp' 2>/dev/null)"
-
-  if [[ "${epoch_expiry}" -le "0" ]]; then
-    echo_stderr "Token has expired!"
-  fi
-
-  echo "${epoch_expiry}"
-}
-
-get_seconds_to_expiry(){
-  : '
-  Get seconds to expiry based on epoch time
-  '
-  local expiry_epoch="$1"
-  bc <<< "${expiry_epoch} - $(date +%s)"
-}
-
-warn_time_to_expiry(){
-  : '
-  Convert the epoch time to expiry to a readable date format
-  '
-  local expiry_in_seconds="$1"
-
-  python3 -c "from datetime import timedelta; from sys import stderr; \
-              time_to_expiry=timedelta(seconds=${expiry_in_seconds}); \
-              d = {'days': time_to_expiry.days}; \
-              d['hours'], rem = divmod(time_to_expiry.seconds, 3600); \
-              d['minutes'], d['seconds'] = divmod(rem, 60); \
-              print('Expired') if ${expiry_in_seconds} < 0 \
-              else print(f\"Warning: Your ica access token will end in {d['days']} days, {d['hours']} hours, {d['minutes']} minutes, {d['seconds']} seconds\", file=stderr)"
-}
-
-## Checkers
-check_token_expiry(){
-  : '
-  Return the expiry in printable format
-  '
-  # Inputs
-  local access_token="$1"
-
-  # local vars
-  local epoch_expiry
-  local seconds_to_expiry
-
-  # Get the JWT token expiry time
-  epoch_expiry="$(get_epoch_expiry "${access_token}")"
-
-  # Compare expiry to current time
-  seconds_to_expiry="$(get_seconds_to_expiry "${epoch_expiry}")"
-
-  # Check token expiry
-  if [[ "${seconds_to_expiry}" -le 0 ]]; then
-    # Token has expired
-    echo_stderr "Error - Your access token has expired! Please refresh with 'ica-add-access-token'"
-    exit 1
-  elif [[ "${seconds_to_expiry}" -le "${SECONDS_PER_WEEK}" ]]; then
-    # Warn user token expires in less than a week
-    echo_stderr "$(warn_time_to_expiry "${seconds_to_expiry}")"
-  fi
-}
 
 check_gds(){
   : '
@@ -149,135 +32,21 @@ check_gds(){
   fi
 }
 
-check_volume(){
-  : '
-  Check volume exists
-  '
+###########ICA-ICA-LAZY SETUP ########################################
 
-  local volume_name="$1"
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
 
-  if ! curl \
-         --silent \
-         --location \
-         --fail \
-         --request GET \
-         --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
-         "${ICA_BASE_URL}/v1/volumes/${volume_name}" >/dev/null 2>&1; then
-    return 1
-  fi
-}
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
 
-check_path_is_folder(){
-  : '
-  Check if the current path is a folder by first listing the folders in the parent path
-  and searching for this folder
-  '
-
-  local volume_name="$1"
-  local gds_path_attr="$2"
-  local data_params=( "--data" "volume.name=${volume_name}"
-                      "--data" "recursive=false"
-                      "--data" "pageSize=${MAX_PAGE_SIZE}" )
-
-  if [[ -n "${gds_path_attr}" && "${gds_path_attr}" != "/" ]]; then
-    data_params+=( "--data" "path=$(get_parent_path "${gds_path_attr}")*" )
-  fi
-
-  if ! folders_obj="$(curl \
-                        --silent \
-                        --location \
-                        --fail \
-                        --request GET \
-                        --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
-                        --url "${ICA_BASE_URL}/v1/folders" \
-                        --get \
-                        "${data_params[@]}" 2>/dev/null)"; then
-    return 1
-  fi
-
-  if [[ "$(jq \
-            --raw-output \
-            --arg "gds_path_attr" "${gds_path_attr}" \
-            '.items[] | select ( .path == $gds_path_attr ) | .path' <<< "${folders_obj}")" != "${gds_path_attr}" ]]; then
-      return 1
-  fi
-}
-
-## Printers
-print_volumes(){
-  : '
-  Print list of volumes
-  '
-  volumes_obj="$(curl \
-                   --silent \
-                   --location \
-                   --fail \
-                   --request GET \
-                   --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
-                   --url "${ICA_BASE_URL}/v1/volumes" \
-                   --get \
-                   --data "pageSize=${MAX_PAGE_SIZE}" 2>/dev/null)"
-
-    jq --raw-output \
-      '.items[] | "gds://\(.name)"' <<< "${volumes_obj}"
-}
-
-print_files_and_subfolders(){
-  : '
-  list the files and the subfolders of the path that match
-  '
-
-  local volume_name="$1"
-  local gds_path_attr="$2"
-
-  # Get folders and files
-  folders_obj="$(curl \
-                   --silent \
-                   --location \
-                   --fail \
-                   --request GET \
-                   --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
-                   --url "${ICA_BASE_URL}/v1/folders" \
-                   --get \
-                   --data "volume.name=${volume_name}" \
-                   --data "recursive=false" \
-                   --data "pageSize=${MAX_PAGE_SIZE}" \
-                   --data "path=${gds_path_attr}*" 2>/dev/null)"
-
-  files_obj="$(curl \
-                 --silent \
-                 --location \
-                 --fail \
-                 --request GET \
-                 --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
-                 --url "${ICA_BASE_URL}/v1/files" \
-                 --get \
-                 --data "volume.name=${volume_name}" \
-                 --data "recursive=false" \
-                 --data "pageSize=${MAX_PAGE_SIZE}" \
-                 --data "path=${gds_path_attr}*" 2>/dev/null)"
-
-  # Get jq items
-  folders="$(jq \
-              --raw-output \
-              --arg "volume_name" "${volume_name}" \
-              '.items[] | "gds://\($volume_name)\(.path)"' <<< "${folders_obj}")"
-  files="$(jq \
-            --raw-output \
-            --arg "volume_name" "${volume_name}" \
-            '.items[] | "gds://\($volume_name)\(.path)"' <<< "${files_obj}")"
-
-  # Write out files and folders but sort on print
-  if [[ -z "${files}" && -z "${folders}" ]]; then
-    echo ""
-  elif [[ -z "${files}" ]]; then
-    echo "${folders}" | sort -f
-  elif [[ -z "${folders}" ]]; then
-    echo "${files}" | sort -f
-  else
-    printf "%s\n%s" "${files}" "${folders}" | sort -f
-  fi
-}
+##########END ICA-ICA-LAZY SETUP ####################################
 
 #######
 # SETUP
@@ -320,25 +89,25 @@ if ! check_gds; then
 fi
 
 # Get the volume
-volume_name="$(get_volume_name)"
+volume_name="$(get_volume_name "${gds_path}")"
 
 if [[ "${volume_name}" == "" ]]; then
-  print_volumes
+  print_volumes "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"
   exit
 fi
 
 # Check volume exists - if not print all volumes
-if ! check_volume "${volume_name}"; then
-  print_volumes
+if ! check_volume "${volume_name}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"; then
+  print_volumes "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"
   exit
 fi
 
 # Get the path
-gds_path_attr="$(get_path)"
+gds_path_attr="$(get_path "${gds_path}")"
 
 # Print from
-if ! check_path_is_folder "${volume_name}" "${gds_path_attr}"; then
-  print_files_and_subfolders "${volume_name}" "$(get_parent_path "${gds_path_attr}")"
+if ! check_path_is_folder "${volume_name}" "${gds_path_attr}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"; then
+  print_files_and_subfolders "${volume_name}" "$(get_parent_path "${gds_path_attr}")" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"
 else
-  print_files_and_subfolders "${volume_name}" "${gds_path_attr}"
+  print_files_and_subfolders "${volume_name}" "${gds_path_attr}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"
 fi

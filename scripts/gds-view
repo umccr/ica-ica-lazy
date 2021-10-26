@@ -4,23 +4,12 @@
 Uses docker links to view the gds file through its presigned url
 '
 
+# Set to fail
 set -euo pipefail
 
-### GLOBALS
-SECONDS_PER_WEEK="604800"
-
-## Internal functions
-echo_stderr(){
-  echo "$@" 1>&2
-}
-
-get_docker_binary(){
-  if type docker 1>/dev/null 2>&1; then
-    echo "docker"
-  else
-    echo "podman"
-  fi
-}
+###########
+# FUNCTIONS
+###########
 
 print_help(){
   echo "
@@ -46,6 +35,20 @@ print_help(){
         the gds path via a presigned url.  This can be used on text files and even gzipped files!
         Use --to-stdout to print the file to stdout, or --browser to open up the file in your browser.
         "
+}
+
+run_links(){
+  : '
+  Runs the links container
+  '
+  local presigned_url="$1"
+  # Send through to links
+  "$(get_docker_binary)" run \
+    --rm \
+    -it \
+    --entrypoint "links" \
+    quay.io/umccr/alpine-links:2.21 \
+    	"${presigned_url}"
 }
 
 # Inputs
@@ -74,152 +77,21 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-###########
-# FUNCTIONS
-###########
+###########ICA-ICA-LAZY SETUP ########################################
 
-# Get volume
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
 
-get_sed_command(){
-  if [[ "${OSTYPE}" == "darwin"* ]]; then
-    echo "gsed"
-  else
-    echo "sed"
-  fi
-}
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
 
-get_epoch_expiry(){
-  : '
-  Get the epoch value of the expiry date of the tokens
-  '
-  local access_token="$1"
-  echo "${access_token}" | \
-    "$(get_sed_command)" -r 's/^(\S+)\.(\S+)\.(\S+)$/\2/' | \
-    ( base64 -d 2>/dev/null || true ) | \
-    jq -r '.exp'
-
-}
-
-get_seconds_to_expiry(){
-  : '
-  Get seconds to expiry based on epoch time
-  '
-  local expiry_epoch="$1"
-  bc <<< "${expiry_epoch} - $(date +%s)"
-}
-
-warn_time_to_expiry(){
-  : '
-  Convert the epoch time to expiry to a readable date format
-  '
-  local expiry_in_seconds="$1"
-
-  python3 -c "from datetime import timedelta; from sys import stderr; \
-              time_to_expiry=timedelta(seconds=${expiry_in_seconds}); \
-              d = {'days': time_to_expiry.days}; \
-              d['hours'], rem = divmod(time_to_expiry.seconds, 3600); \
-              d['minutes'], d['seconds'] = divmod(rem, 60); \
-              print('Expired') if ${expiry_in_seconds} < 0 \
-              else print(f\"Warning: Your ica access token will end in {d['days']} days, {d['hours']} hours, {d['minutes']} minutes, {d['seconds']} seconds\", file=stderr)"
-}
-
-## Checkers
-check_token_expiry(){
-  : '
-  Return the expiry in printable format
-  '
-  # Inputs
-  local access_token="$1"
-
-  # local vars
-  local epoch_expiry
-  local seconds_to_expiry
-
-  # Get the JWT token expiry time
-  epoch_expiry="$(get_epoch_expiry "${access_token}")"
-
-  # Compare expiry to current time
-  seconds_to_expiry="$(get_seconds_to_expiry "${epoch_expiry}")"
-
-  # Check token expiry
-  if [[ "${seconds_to_expiry}" -le 0 ]]; then
-    # Token has expired
-    echo_stderr "Error - Your access token has expired! Please refresh with 'ica-add-access-token'"
-    exit 1
-  elif [[ "${seconds_to_expiry}" -le "${SECONDS_PER_WEEK}" ]]; then
-    # Warn user token expires in less than a week
-    echo_stderr "$(warn_time_to_expiry "${seconds_to_expiry}")"
-  fi
-}
-
-get_volume_from_gds_path(){
-  : '
-  Assumes urllib is available on python3
-  '
-  local gds_path="$1"
-  # Returns the netloc attribute of the gds_path
-  python3 -c "from urllib.parse import urlparse; print(urlparse(\"${gds_path}\").netloc)"
-}
-
-# Get file path
-get_file_path_from_gds_path(){
-  : '
-  Assumes urllib is available on python3
-  '
-  local gds_path="$1"
-  # Returns the path attribute of gds_path input
-  python3 -c "from urllib.parse import urlparse; print(urlparse(\"${gds_path}\").path)"
-}
-
-get_file_id(){
-  : '
-  Use files list on the file and collect the file id from the single item
-  '
-  local volume_name="$1"
-  local file_path="$2"
-  local access_token="$3"
-  local base_url="$4"
-  # Pipe curl output into jq to collect ID and return
-  curl \
-    --silent \
-    --request GET \
-    --header "Authorization: Bearer ${access_token}" \
-    "${base_url}/v1/files?volume.name=${volume_name}&path=${file_path}" | \
-  jq \
-    --raw-output \
-    '.items[] | .id'
-}
-
-get_presigned_url_from_file_id(){
-  : '
-  Use files list on the file and collect the file id from the single item
-  '
-  local file_id="$1"
-  local access_token="$2"
-  local base_url="$3"
-  curl \
-    --silent \
-    --request GET \
-    --header "Authorization: Bearer ${access_token}" \
-    "${base_url}/v1/files/${file_id}" | \
-  jq \
-    --raw-output \
-    '.presignedUrl'
-}
-
-run_links(){
-  : '
-  Runs the links container
-  '
-  local presigned_url="$1"
-  # Send through to links
-  "$(get_docker_binary)" run \
-    --rm \
-    -it \
-    --entrypoint "links" \
-    quay.io/umccr/alpine-links:2.21 \
-    	"${presigned_url}"
-}
+##########END ICA-ICA-LAZY SETUP ####################################
 
 # Checks, ensure access_token is set
 if [[ -z "${access_token}" ]]; then
@@ -236,17 +108,15 @@ else
   check_token_expiry "${access_token}"
 fi
 
-
-
 # Get volume name / get file path from gds path
 volume_name="$(get_volume_from_gds_path "${gds_path}")"
 file_path="$(get_file_path_from_gds_path "${gds_path}")"
 
 # Collect file id
-file_id="$(get_file_id "${volume_name}" "${file_path}" "${access_token}" "${base_url}")"
+file_id="$(get_file_id "${volume_name}" "${file_path}" "${base_url}" "${access_token}")"
 
 # Collect presigned url
-presigned_url="$(get_presigned_url_from_file_id "${file_id}" "${access_token}" "${base_url}")"
+presigned_url="$(get_presigned_url_from_file_id "${file_id}" "${base_url}" "${access_token}")"
 
 # Present file
 if [[ "${to_stdout}" == "true" ]]; then
@@ -262,7 +132,7 @@ elif [[ "${browser}" == "true" ]]; then
     echo_stderr "Error: --browser selected but 'BROWSER' env var is not set"
     exit 1
   fi
-  "${BROWSER}" "${presigned_url}"
+  ${BROWSER} "${presigned_url}"
 else
   # Run links through docker
   run_links "${presigned_url}"

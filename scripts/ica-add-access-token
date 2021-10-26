@@ -39,13 +39,6 @@ READ_ONLY_SCOPE_STRING="GMS.ANALYSISCONFIGURATIONS.READ,TES.TASKS.READ,GDS.FOLDE
 ###########
 
 # Standard functions
-echo_stderr(){
-  : '
-  Write to stderr
-  '
-  echo "$@" 1>&2
-}
-
 check_binaries(){
   : '
   Make sure that curl / jq / python3 pass / binary exists in PATH
@@ -63,151 +56,6 @@ check_env_vars(){
     echo_stderr "Env var ICA_BASE_URL is not set"
     return 1
   fi
-}
-
-# Get scope string based on different use cases
-get_scope_string(){
-  : '
-  Return the scopes based on the users desired access level
-  '
-  local scope_level="$1"
-  local scope
-
-  if [[ "${scope_level}" == "read-only" ]]; then
-    echo "${READ_ONLY_SCOPE_STRING}"
-  elif [[ "${scope_level}" == "admin" ]]; then
-    echo "${ADMIN_SCOPE_STRING}"
-  elif [[ "${scope_level}" == "contributor" ]]; then
-    echo "${CONTRIBUTOR_SCOPE_STRING}"
-  fi
-}
-
-# Personal access token functions
-get_default_api_key(){
-  : '
-  Gets the api key from /ica/api-keys/default-api-key in users password store
-  '
-  pass "${DEFAULT_API_KEY_STORE_PATH}" 2>/dev/null
-}
-
-create_personal_access_token(){
-  : '
-  Create a personal access token
-  '
-  local token_obj
-
-  token_obj="$(curl \
-                 --silent \
-                 --location \
-                 --fail \
-                 --request POST \
-                 --url "${ICA_BASE_URL}/v1/tokens" \
-                 --header "Accept: application/json" \
-                 --header "X-API-Key: $(get_default_api_key)" \
-                 --header "Content-Length: 0")"
-
-  # Return the access token attribute
-  jq --raw-output \
-    '.access_token' \
-    <<< "${token_obj}"
-}
-
-get_project_id_from_project_name(){
-  : '
-  Checks that the project exists from the personal context
-  and returns the project id
-  '
-
-  local project_name="$1"
-  local personal_access_token="$2"
-  local projects_list_obj
-
-  # List project objects
-  projects_list_obj="$(curl \
-                         --silent \
-                         --location \
-                         --fail \
-                         --request GET \
-                         --url "${ICA_BASE_URL}/v1/projects" \
-                         --header "Authorization: Bearer ${personal_access_token}")"
-
-  # Although we don't actually use the project id
-  project_id="$(jq --raw-output \
-                   --arg project_name "${project_name}" \
-                   '.items[] | select(.name==$project_name) | .id' \
-                   <<< "${projects_list_obj}")"
-
-  # Get the project id from the project name
-  if [[ -z "${project_id}" || "${project_id}" == "null" ]]; then
-    echo_stderr "Could not get the project id from the project name \"${project_name}\""
-    return 1
-  fi
-
-  # Return the project id
-  echo "${project_id}"
-}
-
-create_project_token(){
-  : '
-  Creates an ica access token for a given project
-  '
-  local project_id="$1"
-  local scope="$2"
-  local personal_access_token="$3"
-
-  local token_obj
-
-  token_obj="$(curl \
-                 --silent \
-                 --location \
-                 --fail \
-                 --request POST \
-                 --url "${ICA_BASE_URL}/v1/tokens" \
-                 --header "Accept: application/json" \
-                 --header "Content-Length: 0" \
-                 --header "X-API-Key: $(get_default_api_key)" \
-                 --header "Authorization: Bearer ${personal_access_token}" \
-                 --get \
-                 --data "cid=${project_id}" \
-                 --data "scopes=$(get_scope_string "${scope}")")"
-
-  # Return the access token attribute
-  jq --raw-output \
-    '.access_token' \
-    <<< "${token_obj}"
-}
-
-add_token_to_json_file(){
-  : '
-  Adds the token to the json file
-  '
-  local project_name="$1"
-  local scope="$2"
-  local project_access_token="$3"
-
-  # Get directory
-  mkdir -p "$(dirname "${TOKEN_FILE_PATH}")"
-  chmod 700 "$(dirname "${TOKEN_FILE_PATH}")"
-
-  if [[ ! -f "${TOKEN_FILE_PATH}" ]]; then
-    in_json="{}"
-  else
-    in_json="$(cat "${TOKEN_FILE_PATH}")"
-  fi
-
-  # Import file and add to list
-  tokens_obj="$(jq \
-                  --raw-output \
-                  --arg project_name "${project_name}" \
-                  --arg scope "${scope}" \
-                  --arg project_access_token "${project_access_token}" \
-                  '.[$project_name][$scope] = $project_access_token' <<< "${in_json}")"
-
-  # Write token object back out to file
-  echo "${tokens_obj}" > "${TOKEN_FILE_PATH}"
-
-  # Change permissions on file
-  chmod 600 "${TOKEN_FILE_PATH}"
 }
 
 print_help(){
@@ -258,6 +106,22 @@ while [ $# -gt 0 ]; do
   shift 1
 done
 
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
 # Check args
 if [[ -z "${project_name-}" ]]; then
   echo_stderr "Error: --project-name not defined"
@@ -303,7 +167,7 @@ fi
 # CREATE PERSONAL PAT
 #####################
 echo_stderr "Creating a personal access token"
-personal_access_token="$(create_personal_access_token)"
+personal_access_token="$(create_personal_access_token "${ICA_BASE_URL}")"
 # Check personal token
 if [[ -z "${personal_access_token}" || "${personal_access_token}" == "null" ]]; then
   echo_stderr "Error: Could not create a personal access token"
@@ -325,7 +189,7 @@ fi
 # CREATE PROJECT TOKEN
 ######################
 echo_stderr "Creating project token"
-project_access_token="$(create_project_token "${project_id}" "${scope}" "${personal_access_token}")"
+project_access_token="$(create_project_token "${project_id}" "${scope}" "${ICA_BASE_URL}" "${personal_access_token}")"
 # Check project token
 if [[ -z "${project_access_token}" || "${project_access_token}" == "null" ]]; then
   echo_stderr "Error: Could not create a project access token"

@@ -7,9 +7,7 @@ Credit where credit is due:
 * https://til.hashrocket.com/posts/uv0bjiokwk-use-jq-to-filter-objects-list-with-regex
 '
 
-# Globals
-MAX_PAGE_SIZE=1000
-SECONDS_PER_WEEK="604800"
+set -euo pipefail
 
 # Help function
 print_help(){
@@ -37,11 +35,6 @@ print_help(){
         "
 }
 
-## Internal functions
-echo_stderr(){
-  echo "$@" 1>&2
-}
-
 binaries_check(){
   : '
   Check each of the required binaries are available
@@ -49,286 +42,6 @@ binaries_check(){
   if ! (type jq python3 curl 1>/dev/null); then
     return 1
   fi
-}
-
-get_sed_command(){
-  if [[ "${OSTYPE}" == "darwin"* ]]; then
-    echo "gsed"
-  else
-    echo "sed"
-  fi
-}
-
-get_epoch_expiry(){
-  : '
-  Get the epoch value of the expiry date of the tokens
-  '
-  local access_token="$1"
-  echo "${access_token}" | \
-    "$(get_sed_command)" -r 's/^(\S+)\.(\S+)\.(\S+)$/\2/' | \
-    ( base64 -d 2>/dev/null || true ) | \
-    jq -r '.exp'
-}
-
-get_seconds_to_expiry(){
-  : '
-  Get seconds to expiry based on epoch time
-  '
-  local expiry_epoch="$1"
-  bc <<< "${expiry_epoch} - $(date +%s)"
-}
-
-warn_time_to_expiry(){
-  : '
-  Convert the epoch time to expiry to a readable date format
-  '
-  local expiry_in_seconds="$1"
-
-  python3 -c "from datetime import timedelta; from sys import stderr; \
-              time_to_expiry=timedelta(seconds=${expiry_in_seconds}); \
-              d = {'days': time_to_expiry.days}; \
-              d['hours'], rem = divmod(time_to_expiry.seconds, 3600); \
-              d['minutes'], d['seconds'] = divmod(rem, 60); \
-              print('Expired') if ${expiry_in_seconds} < 0 \
-              else print(f\"Warning: Your ica access token will end in {d['days']} days, {d['hours']} hours, {d['minutes']} minutes, {d['seconds']} seconds\", file=stderr)"
-}
-
-check_token_expiry(){
-  : '
-  Return the expiry in printable format
-  '
-  # Inputs
-  local access_token="$1"
-
-  # local vars
-  local epoch_expiry
-  local seconds_to_expiry
-
-  # Get the JWT token expiry time
-  epoch_expiry="$(get_epoch_expiry "${access_token}")"
-
-  # Compare expiry to current time
-  seconds_to_expiry="$(get_seconds_to_expiry "${epoch_expiry}")"
-
-  # Check token expiry
-  if [[ "${seconds_to_expiry}" -le 0 ]]; then
-    # Token has expired
-    echo_stderr "Error - Your access token has expired! Please refresh with 'ica-add-access-token'"
-    exit 1
-  elif [[ "${seconds_to_expiry}" -le "${SECONDS_PER_WEEK}" ]]; then
-    # Warn user token expires in less than a week
-    echo_stderr "$(warn_time_to_expiry "${seconds_to_expiry}")"
-  fi
-}
-
-# Get volume from gds path
-get_volume_from_gds_path() {
-  : '
-  Assumes urllib is available on python3
-  '
-  local gds_path="$1"
-
-  # Returns the netloc attribute of the gds_path
-  python3 -c "from urllib.parse import urlparse; print(urlparse(\"${gds_path}\").netloc)"
-}
-
-# Get folder path
-get_folder_path_from_gds_path() {
-  : '
-  Assumes urllib is available on python3
-  '
-  local gds_path="$1"
-
-  # Returns the path attribute of gds_path input
-  python3 -c "from urllib.parse import urlparse; from pathlib import Path; print(str(Path(urlparse(\"${gds_path}\").path)).rstrip(\"/\") + \"/\")"
-}
-
-# Get the parent path
-get_parent_path(){
-  : '
-  Take the path input as a python lib and then return the parent (with a trailing slash)
-  '
-
-  local gds_path_attr="$1"
-
-  python3 -c "from pathlib import Path; print(str(Path(\"${gds_path_attr}\").parent).rstrip(\"/\") + \"/\")"
-}
-
-check_volume(){
-  : '
-  Confirm the volume exists
-  '
-  local volume_name="$1"
-
-  if ! curl \
-         --silent \
-         --location \
-         --fail \
-         --request GET \
-         --header 'Accept: application/json' \
-         --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
-         --url "${ICA_BASE_URL}/v1/volumes/${volume_name}" \
-         --get >/dev/null 2>&1; then
-    return 1
-  else
-    return 0
-  fi
-}
-
-check_path_is_folder(){
-  : '
-  Check if the current path is a folder by first listing the folders in the parent path
-  and searching for this folder
-  '
-
-  local volume_name="$1"
-  local gds_path_attr="$2"
-  local data_params=( "--data" "volume.name=${volume_name}"
-                      "--data" "recursive=false"
-                      "--data" "pageSize=${MAX_PAGE_SIZE}" )
-
-  if [[ -z "${gds_path_attr}" || "${gds_path_attr}" == "/" ]]; then
-    # Check volume exists
-    if ! check_volume "${volume_name}"; then
-      return 1
-    else
-      return 0
-    fi
-  fi
-
-
-  if [[ -n "${gds_path_attr}" && "${gds_path_attr}" != "/" ]]; then
-    data_params+=( "--data" "path=$(get_parent_path "${gds_path_attr}")*" )
-  fi
-
-  if ! folders_obj="$(curl \
-                        --silent \
-                        --location \
-                        --fail \
-                        --request GET \
-                        --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
-                        --url "${ICA_BASE_URL}/v1/folders" \
-                        --get \
-                        "${data_params[@]}" 2>/dev/null)"; then
-    return 1
-  fi
-
-  if [[ "$(jq \
-            --raw-output \
-            --arg "gds_path_attr" "${gds_path_attr}" \
-            '.items[] | select ( .path == $gds_path_attr ) | .path' <<< "${folders_obj}")" != "${gds_path_attr}" ]]; then
-      return 1
-  fi
-}
-
-get_file_names(){
-  : '
-  list the files and the subfolders of the path that match
-  '
-  local volume_name="$1"
-  local gds_path_attr="$2"
-  local name="$3"
-  local files_obj
-  local files
-
-  files_obj="$(curl \
-                 --silent \
-                 --location \
-                 --fail \
-                 --request GET \
-                 --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
-                 --url "${ICA_BASE_URL}/v1/files" \
-                 --get \
-                 --data "volume.name=${volume_name}" \
-                 --data "recursive=false" \
-                 --data "pageSize=${MAX_PAGE_SIZE}" \
-                 --data "path=${gds_path_attr}*" 2>/dev/null)"
-
-  files="$(jq --raw-output \
-             --arg "volume_name" "${volume_name}" \
-             --arg "name" "${name}" \
-             '.items[] | select(.name | test($name)) | "gds://\($volume_name)\(.path)"' <<< "${files_obj}")"
-
-  printf "%s" "${files}" | sort -f
-}
-
-get_subfolder_names(){
-  : '
-  list the files and the subfolders of the path that match
-  '
-  local volume_name="$1"
-  local gds_path_attr="$2"
-  local name="$3"
-  local folders_obj
-  local folders
-
-  # Get folders and files
-  folders_obj="$(curl \
-                   --silent \
-                   --location \
-                   --fail \
-                   --request GET \
-                   --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
-                   --url "${ICA_BASE_URL}/v1/folders" \
-                   --get \
-                   --data "volume.name=${volume_name}" \
-                   --data "recursive=false" \
-                   --data "pageSize=${MAX_PAGE_SIZE}" \
-                   --data "path=${gds_path_attr}*" 2>/dev/null)"
-
-  if [[ -z "${name}" ]]; then
-    # We're returning the path
-    jq --compact-output --raw-output \
-      '.items[] | .path' <<< "${folders_obj}"
-  else
-    # We're printing the outputs with the volume name included
-    folders="$(jq --raw-output \
-                 --arg "volume_name" "${volume_name}" \
-                 --arg "name" "${name}" \
-                 '.items[] | select(.name|test($name)) | "gds://\($volume_name)\(.path)"' <<< "${folders_obj}")"
-    printf "%s" "${folders}" | sort -f
-  fi
-}
-
-gds_search(){
-  : '
-  Recursively list and print all files / directories with the existing dirs
-  '
-  local volume_name="$1"
-  local folder_path="$2"
-  local depth="$3"
-  local mindepth="$4"
-  local maxdepth="$5"
-  local type="$6"
-  local name="$7"
-  local subfolder_paths_array=()
-
-  # Check we haven't depthed too far
-  if [[ "${maxdepth}" != "-1" && "${maxdepth}" -le "${depth}" ]]; then
-    # We've gone too far
-    return 0
-  fi
-
-  # If we're within 'range' of printing files / dirs, then do so
-  if [[ ( "${mindepth}" == "-1" || "${mindepth}" -le "${depth}" ) && ( "${maxdepth}" == "-1" || "${depth}" -le "${maxdepth}" ) ]]; then
-    if [[ "${type}" == "directory" ]]; then
-      get_subfolder_names "${volume_name}" "${folder_path}" "${name}"
-    else
-      get_file_names "${volume_name}" "${folder_path}" "${name}"
-    fi
-  fi
-
-  # We're still not beyond the maximum depth
-  depth="$(expr "${depth}" + 1)"
-
-  # Recollect the array of subfolders
-  readarray -t subfolder_paths_array < <(get_subfolder_names "${volume_name}" "${folder_path}")
-
-  # Iterate through array
-  for subfolder_path in "${subfolder_paths_array[@]}"; do
-    # echo_stderr "Checking folder gds://${volume_name}/${subfolder_path}"  # FIXME - add in as a debug parameter
-    gds_search "${volume_name}" "${subfolder_path}" "${depth}" "${mindepth}" "${maxdepth}" "${type}" "${name}"
-  done
 }
 
 # Get args
@@ -368,6 +81,22 @@ while [ $# -gt 0 ]; do
   esac
   shift 1
 done
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
 
 # Check and set args
 if [[ -z "${type}" ]]; then
@@ -438,9 +167,9 @@ name="${name//\./\\.}"
 # Place literal '^' at start and '$' at end of name
 name="^${name}\$"
 
-if ! check_path_is_folder "${volume_name}" "${folder_path}"; then
+if ! check_path_is_folder "${volume_name}" "${folder_path}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"; then
   echo_stderr "Could not find directory '${gds_path}'"
   exit 1
 fi
 
-gds_search "${volume_name}" "${folder_path}" "0" "${mindepth}" "${maxdepth}" "${type}" "${name}"
+gds_search "${volume_name}" "${folder_path}" "0" "${mindepth}" "${maxdepth}" "${type}" "${name}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"

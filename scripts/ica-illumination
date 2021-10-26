@@ -11,12 +11,6 @@ set -euo pipefail
 #########
 DEFAULT_PORT="3000"
 DEFAULT_SCOPE="read-only"
-TOKENS_PATH="$HOME/.ica-ica-lazy/tokens/tokens.json"
-SECONDS_PER_WEEK="604800"
-
-echo_stderr(){
-  echo "$@" 1>&2
-}
 
 print_help(){
   echo "
@@ -36,145 +30,11 @@ print_help(){
   "
 }
 
-get_sed_command(){
-  if [[ "${OSTYPE}" == "darwin"* ]]; then
-    echo "gsed"
-  else
-    echo "sed"
-  fi
-}
-
-get_docker_binary(){
-  if type docker 1>/dev/null 2>&1; then
-    echo "docker"
-  else
-    echo "podman"
-  fi
-}
-
-get_epoch_expiry(){
-  : '
-  Get the epoch value of the expiry date of the tokens
-  '
-  local access_token="$1"
-
-  echo "${access_token}" | \
-    "$(get_sed_command)" -r 's/^(\S+)\.(\S+)\.(\S+)$/\2/' | \
-    ( base64 \
-        --decode 2>/dev/null || true ) | \
-    jq -r '.exp'
-}
-
-get_seconds_to_expiry(){
-  : '
-  Get seconds to expiry based on epoch time
-  '
-  local expiry_epoch="$1"
-  bc <<< "${expiry_epoch} - $(date +%s)"
-}
-
-check_port_not_in_use(){
-  : '
-  Check port not in use
-  '
-
-  # Check port doesn't have an existing container running on it
-  iterable=0
-  max_iterable=10
-
-  while :; do
-    # Don't go through an infinite loop!
-    iterable=$(("${iterable}" + 1))
-    if [[ "${iterable}" -ge "${max_iterable}" ]]; then
-      echo_stderr "Tried 10 ports, all of them are full!"
-      exit 1
-    fi
-
-    # Check if port is in use - podman doesn't support the --publish filter
-    if [[ "$(get_docker_binary)" == "docker" && "$(docker ps --filter publish="${port}" --quiet | wc -l)" == 0 ]]; then
-      # Port not in use!
-      break
-    elif [[ "$(get_docker_binary)" == "podman" && "$(podman ps --format "{{.Ports}}" | sed -r 's%^[0-9|\.]+\:([0-9]+)->[0-9]+\/tcp$%\1%' | grep -c "^${port}$")" == 0 ]]; then
-      # Port not in use!
-      break
-    fi
-
-    # Iterate port by one
-    echo_stderr "Port ${port} in use, trying $(("${port}" + 1))"
-    port="$(("${port}" + 1))"
-  done
-
-  echo "${port}"
-}
-
-warn_time_to_expiry(){
-  : '
-  Convert the epoch time to expiry to a readable date format
-  '
-  local expiry_in_seconds="$1"
-
-  python3 -c "from datetime import timedelta; from sys import stderr; \
-              time_to_expiry=timedelta(seconds=${expiry_in_seconds}); \
-              d = {'days': time_to_expiry.days}; \
-              d['hours'], rem = divmod(time_to_expiry.seconds, 3600); \
-              d['minutes'], d['seconds'] = divmod(rem, 60); \
-              print('Expired') if ${expiry_in_seconds} < 0 \
-              else print(f\"Warning: Your ica access token will end in {d['days']} days, {d['hours']} hours, {d['minutes']} minutes, {d['seconds']} seconds\", file=stderr)"
-}
-
-## Checkers
-check_token_expiry(){
-  : '
-  Return the expiry in printable format
-  '
-  # Inputs
-  local access_token="$1"
-
-  # local vars
-  local epoch_expiry
-  local seconds_to_expiry
-
-  # Get the JWT token expiry time
-  epoch_expiry="$(get_epoch_expiry "${access_token}")"
-
-  # Compare expiry to current time
-  seconds_to_expiry="$(get_seconds_to_expiry "${epoch_expiry}")"
-
-  # Check token expiry
-  if [[ "${seconds_to_expiry}" -le 0 ]]; then
-    # Token has expired
-    echo_stderr "Error - Your access token has expired! Please refresh with 'ica-add-access-token'"
-    exit 1
-  elif [[ "${seconds_to_expiry}" -le "${SECONDS_PER_WEEK}" ]]; then
-    # Warn user token expires in less than a week
-    echo_stderr "$(warn_time_to_expiry "${seconds_to_expiry}")"
-  fi
-}
-
-get_access_token(){
-  : '
-  Check the level of the scope
-  '
-  # Func inputs
-  local project_name="$1"
-  local scope="$2"
-  local tokens_file_path="$3"
-  local in_json
-  local project_access_token
-  in_json="$(cat "${tokens_file_path}")"
-  project_access_token="$(jq \
-                            --raw-output \
-                            --arg project_name "${project_name}" \
-                            --arg scope "${scope}" \
-                          '.[$project_name][$scope]' <<< "${in_json}")"
-  echo "${project_access_token}"
-}
-
 check_binaries(){
   : '
   Make sure that jq / docker binaries exists in PATH
   '
-  if ! (type "$(get_docker_binary)" jq "${sed_binary}" 1>/dev/null); then
+  if ! (type "$(get_docker_binary)" jq "$(get_sed_binary)" 1>/dev/null); then
     return 1
   fi
 }
@@ -219,12 +79,21 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-# Get sed binary
-if [[ "${OSTYPE}" == "darwin" ]]; then
-  sed_binary="gsed"
-else
-  sed_binary="sed"
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
 fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
 
 # Check binaries
 if ! check_binaries; then
@@ -240,17 +109,17 @@ if [[ -z "${project_name-}" ]]; then
 fi
 
 # Check project name in TOKENS PATH
-if [[ -z "$(jq --raw-output --arg project "${project_name}" 'select(.[$project] != null) | .[$project] | keys' <<< cat "${TOKENS_PATH}")" ]]; then
+if [[ -z "$(jq --raw-output --arg project "${project_name}" 'select(.[$project] != null) | .[$project] | keys' <<< cat "$(get_tokens_path "${ICA_ICA_LAZY_HOME}")")" ]]; then
   echo_stderr "Error: Could not get project '${project_name}' from tokens path"
   exit 1
 fi
 
 # Get access token
-project_access_token="$(get_access_token "${project_name}" "${DEFAULT_SCOPE}" "${TOKENS_PATH}")"
+project_access_token="$(get_access_token "${project_name}" "${DEFAULT_SCOPE}" "$(get_tokens_path "${ICA_ICA_LAZY_HOME}")")"
 
 # Try admin scope
 if [[ -z "${project_access_token}" || "${project_access_token}" == "null" ]]; then
-  project_access_token="$(get_access_token "${project_name}" "admin" "${TOKENS_PATH}")"
+  project_access_token="$(get_access_token "${project_name}" "admin" "$(get_tokens_path "${ICA_ICA_LAZY_HOME}")")"
 fi
 
 
@@ -283,11 +152,11 @@ fi
 echo_stderr "Docker launched Illumination successfully"
 echo_stderr "Please head to localhost://${port} on your preferred browser"
 
-docker_name="$("$(get_docker_binary)" container inspect "${docker_id}" | jq --raw-output '.[0].Name' | "${sed_binary}" 's%^\/%%')"
+docker_name="$("$(get_docker_binary)" container inspect "${docker_id}" | jq --raw-output '.[0].Name' | "$(get_sed_binary)" 's%^\/%%')"
 
 echo_stderr "To stop the container, please run '$(get_docker_binary) kill \"${docker_name}\"'"
 
-if [[ -n "${BROWSER}" ]]; then
+if [[ -n "${BROWSER-}" ]]; then
   echo_stderr "${BROWSER} environment variable is set. Opening up 'localhost://${port}'"
-  "${BROWSER}" "http://localhost:${port}"
+  ${BROWSER} "http://localhost:${port}"
 fi

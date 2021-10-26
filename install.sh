@@ -199,13 +199,19 @@ rsync --delete --archive \
 rsync --delete --archive \
   "$(get_this_path)/autocompletion/" "${main_dir}/autocompletion/"
 
+#########################
+# COPY INTERNAL FUNCTIONS
+#########################
+rsync --delete --archive \
+  "$(get_this_path)/internal-functions/" "${main_dir}/internal-functions/"
+
 #################
 # PRINT USER HELP
 #################
 if [[ "${user_shell}" == "bash" ]]; then
-  rc_profile="${HOME}/.bash_profile"
+  rc_profile="${HOME}/.bashrc"
 elif [[ "${user_shell}" == "zsh" ]]; then
-  rc_profile="${HOME}/.zlogin"
+  rc_profile="${HOME}/.zshrc"
 else
   rc_profile="${HOME}/.${user_shell}rc"
 fi
@@ -214,19 +220,20 @@ echo_stderr "INSTALLATION COMPLETE!"
 echo_stderr "To start using the lazy scripts, add the following lines to ${rc_profile}"
 echo_stderr "######ICA-ICA-LAZY######"
 echo_stderr "export ICA_BASE_URL=\"https://aps2.platform.illumina.com\""
+echo_stderr "export ICA_ICA_LAZY_HOME=\"${main_dir}\""
 echo_stderr "# Add scripts to PATH var"
-echo_stderr "export PATH=\"\$PATH:${main_dir}/scripts\""
+echo_stderr "export PATH=\"\$PATH:\$ICA_ICA_LAZY_HOME/scripts\""
 echo_stderr "# Source functions"
-echo_stderr "source \"${main_dir}/functions/\"*\".sh\""
+echo_stderr "source \"\$ICA_ICA_LAZY_HOME/functions/\"*\".sh\""
 
 # Autocompletion differs between shells
 echo_stderr "# Source autocompletions"
 if [[ "${user_shell}" == "bash" ]]; then
-  echo_stderr "for f in \"${main_dir}/autocompletion/${user_shell}/\"*\".bash\"; do"
+  echo_stderr "for f in \"\$ICA_ICA_LAZY_HOME/autocompletion/${user_shell}/\"*\".bash\"; do"
   echo_stderr "    . \"\$f\""
   echo_stderr "done"
 elif [[ "${user_shell}" == "zsh" ]]; then
-  echo_stderr "fpath=(\"${main_dir}/autocompletion/${user_shell}/\" \$fpath)"
+  echo_stderr "fpath=(\"\$ICA_ICA_LAZY_HOME/autocompletion/${user_shell}/\" \$fpath)"
   if [[ "${OSTYPE}" == "darwin"* ]]; then
     # Mac Users need to run 'autoload' before running compinit
     echo_stderr "autoload -Uz compinit"

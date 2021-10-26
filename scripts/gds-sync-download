@@ -56,230 +56,6 @@ binaries_check(){
   fi
 }
 
-# Check destination path
-check_download_path(){
-  local dest_path="$1"
-
-  if [[ ! -d "$(dirname "${dest_path}")" ]]; then
-    echo_stderr "Error creating \"${dest_path}\". Output paths parent must exist"
-  fi
-}
-
-# Get volume from gds path
-get_volume_from_gds_path() {
-  : '
-  Assumes urllib is available on python3
-  '
-  local gds_path="$1"
-
-  # Returns the netloc attribute of the gds_path
-  python3 -c "from urllib.parse import urlparse; print(urlparse(\"${gds_path}\").netloc)"
-}
-
-# Get folder path
-get_folder_path_from_gds_path() {
-  : '
-  Assumes urllib is available on python3
-  '
-  local gds_path="$1"
-
-  # Returns the path attribute of gds_path input
-  python3 -c "from urllib.parse import urlparse; from pathlib import Path; print(str(Path(urlparse(\"${gds_path}\").path)).rstrip(\"/\") + \"/\")"
-}
-
-get_sed_command(){
-  if [[ "${OSTYPE}" == "darwin"* ]]; then
-    echo "gsed"
-  else
-    echo "sed"
-  fi
-}
-
-get_epoch_expiry(){
-  : '
-  Get the epoch value of the expiry date of the tokens
-  '
-  local access_token="$1"
-  echo "${access_token}" | \
-    "$(get_sed_command)" -r 's/^(\S+)\.(\S+)\.(\S+)$/\2/' | \
-    ( base64 -d 2>/dev/null || true ) | \
-    jq -r '.exp'
-}
-
-get_seconds_to_expiry(){
-  : '
-  Get seconds to expiry based on epoch time
-  '
-  local expiry_epoch="$1"
-  bc <<< "${expiry_epoch} - $(date +%s)"
-}
-
-warn_time_to_expiry(){
-  : '
-  Convert the epoch time to expiry to a readable date format
-  '
-  local expiry_in_seconds="$1"
-
-  python3 -c "from datetime import timedelta; from sys import stderr; \
-              time_to_expiry=timedelta(seconds=${expiry_in_seconds}); \
-              d = {'days': time_to_expiry.days}; \
-              d['hours'], rem = divmod(time_to_expiry.seconds, 3600); \
-              d['minutes'], d['seconds'] = divmod(rem, 60); \
-              print('Expired') if ${expiry_in_seconds} < 0 \
-              else print(f\"Warning: Your ica access token will end in {d['days']} days, {d['hours']} hours, {d['minutes']} minutes, {d['seconds']} seconds\", file=stderr)"
-}
-
-check_token_expiry(){
-  : '
-  Return the expiry in printable format
-  '
-  # Inputs
-  local access_token="$1"
-
-  # local vars
-  local epoch_expiry
-  local seconds_to_expiry
-
-  # Get the JWT token expiry time
-  epoch_expiry="$(get_epoch_expiry "${access_token}")"
-
-  # Compare expiry to current time
-  seconds_to_expiry="$(get_seconds_to_expiry "${epoch_expiry}")"
-
-  # Check token expiry
-  if [[ "${seconds_to_expiry}" -le 0 ]]; then
-    # Token has expired
-    echo_stderr "Error - Your access token has expired! Please refresh with 'ica-add-access-token'"
-    exit 1
-  elif [[ "${seconds_to_expiry}" -le "${SECONDS_PER_WEEK}" ]]; then
-    # Warn user token expires in less than a week
-    echo_stderr "$(warn_time_to_expiry "${seconds_to_expiry}")"
-  fi
-}
-
-# Get folder id
-get_folder_id() {
-  : '
-  Use folders list on the folder and collect the folder id from the single item
-  '
-  local volume_name="$1"
-  local folder_path="$2"
-  local access_token="$3"
-  local base_url="$4"
-
-  # Pipe curl output into jq to collect ID and return
-  curl \
-    --silent \
-    --request GET \
-    --header "Authorization: Bearer ${access_token}" \
-    "${base_url}/v1/folders?volume.name=${volume_name}&path=${folder_path}" |
-    jq \
-      --raw-output \
-      '.items[] | .id'
-}
-
-# Get aws access creds from folder id
-get_aws_access_creds_from_folder_id() {
-  : '
-  Use folders list on the folder and collect the folder id from the single item
-  '
-  local folder_id="$1"
-  local access_token="$2"
-  local base_url="$3"
-  local aws_credentials=""
-
-  # https://ica-docs.readme.io/reference#updatefolder expects
-  # --header 'Content-Type: application/*+json'
-  # We're not actually patching anything, we're just getting some temporary credss
-  curl \
-    --silent \
-    --request PATCH \
-    --header 'Accept: application/json' \
-    --header 'Content-Type: application/*+json' \
-    --header "Authorization: Bearer ${access_token}" \
-    "${base_url}/v1/folders/${folder_id}?include=objectStoreAccess" | {
-    # We take the S3 upload creds
-    # Even though we're downloading only, aws s3 sync needs the put request param
-    jq \
-      --raw-output \
-      '.objectStoreAccess.awsS3TemporaryUploadCredentials'
-  }
-
-}
-
-# Credential get functions
-get_access_key_id_from_credentials() {
-  : '
-  Returns access_Key_id attribute
-  '
-
-  local aws_credentials="$1"
-
-  echo "${aws_credentials}" | jq --raw-output '.access_Key_Id'
-}
-
-get_secret_access_key_from_credentials() {
-  : '
-  Returns secret_Access_Key attribute
-  '
-
-  local aws_credentials="$1"
-
-  echo "${aws_credentials}" | jq --raw-output '.secret_Access_Key'
-}
-
-get_session_token_from_credentials() {
-  : '
-  Returns the session_Token attribute
-  '
-
-  local aws_credentials="$1"
-
-  echo "${aws_credentials}" | jq --raw-output '.session_Token'
-}
-
-get_region_from_credentials() {
-  : '
-  Returns the region attribute
-  '
-
-  local aws_credentials="$1"
-
-  echo "${aws_credentials}" | jq --raw-output '.region'
-
-}
-
-get_bucket_name_from_credentials() {
-  : '
-  Returns the bucketName attribute
-  '
-
-  local aws_credentials="$1"
-
-  echo "${aws_credentials}" | jq --raw-output '.bucketName'
-
-}
-
-get_key_prefix_from_credentials() {
-  : '
-  Returns the keyPrefix attribute
-  '
-
-  local aws_credentials="$1"
-
-  echo "${aws_credentials}" | jq --raw-output '.keyPrefix'
-
-}
-
-strip_path_from_base_url() {
-  : '
-  Base url should not contain any path content. We use python3 urlparse to return just the scheme and netloc.
-  '
-  local base_url="$1"
-
-  # Returns the path attribute of base_url input
-  python3 -c "from urllib.parse import urlparse; print(urlparse(\"${base_url}\").scheme + \"://\" + urlparse(\"${base_url}\").netloc)"
-}
 
 # Start main
 
@@ -289,13 +65,6 @@ gds_path=""
 download_path="$PWD"
 base_url="${ICA_BASE_URL-}"
 access_token="${ICA_ACCESS_TOKEN-}"
-
-# Check available binaries exist
-if ! binaries_check; then
-  echo_stderr "Please make sure binaries aws, jq and python3 are all available on your PATH variable"
-  print_help
-  exit 1
-fi
 
 # Get args from command line
 while [ $# -gt 0 ]; do
@@ -337,6 +106,30 @@ while [ $# -gt 0 ]; do
   esac
   shift 1
 done
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
+
+# Check available binaries exist
+if ! binaries_check; then
+  echo_stderr "Please make sure binaries aws, jq and python3 are all available on your PATH variable"
+  print_help
+  exit 1
+fi
 
 # Strip base url
 base_url="$(strip_path_from_base_url "${base_url}")"
@@ -388,7 +181,7 @@ gds_volume="$(get_volume_from_gds_path "${gds_path}")"
 gds_folder_path="$(get_folder_path_from_gds_path "${gds_path}")"
 
 # Get the folder id
-folder_id="$(get_folder_id "${gds_volume}" "${gds_folder_path}" "${access_token}" "${base_url}")"
+folder_id="$(get_folder_id "${gds_volume}" "${gds_folder_path}" "${base_url}" "${access_token}")"
 
 # Check folder id is found
 if [[ -z "${folder_id}" || "${folder_id}" == "null" ]]; then
@@ -397,7 +190,7 @@ if [[ -z "${folder_id}" || "${folder_id}" == "null" ]]; then
 fi
 
 # Get the json aws creds with the curl PATCH command
-aws_credentials="$(get_aws_access_creds_from_folder_id "${folder_id}" "${access_token}" "${base_url}")"
+aws_credentials="$(get_aws_access_creds_from_folder_id "${folder_id}" "${base_url}" "${access_token}")"
 
 # Creds to be exported
 aws_access_key_id="$(get_access_key_id_from_credentials "${aws_credentials}")"
