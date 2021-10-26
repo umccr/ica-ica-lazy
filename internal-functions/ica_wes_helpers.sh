@@ -17,23 +17,30 @@ get_workflow_run_ids(){
   local response
   local next_page_token
   local url
+  local data_params
 
-  # Initalise next_page_token
+  # Initalise next_page_token and set url
   next_page_token="null"
+  url="${ica_base_url}/v1/workflows/runs"
 
   while :; do
-    url="${ica_base_url}/v1/workflows/runs?status=succeeded&pageSize=${MAX_PAGE_SIZE}"
+    data_params=( "--data" "status=succeeded"
+                  "--data" "pageSize=${MAX_PAGE_SIZE}"
+                  "--data" "sort=timeCreated+desc"
+                  "--data" "include=totalItemCount" )
     if [[ ! "${next_page_token}" == "null" ]]; then
-      url="${url}&pageToken=${next_page_token}"
+      data_params+=( "--data" "pageToken=${next_page_token}" )
     fi
     response="$(curl \
-      --silent \
-      --fail \
-      --location \
-      --request GET \
-      --header "Accept: application/json" \
-      --header "Authorization: Bearer ${ica_access_token}" \
-      --url "${url}")"
+                  --silent \
+                  --fail \
+                  --location \
+                  --request GET \
+                  --header "Accept: application/json" \
+                  --header "Authorization: Bearer ${ica_access_token}" \
+                  --url "${url}" \
+                  --get \
+                  "${data_params[@]}")"
 
     # Print existing items
     jq --raw-output --compact-output '.items[] | .id' <<< "${response}"
@@ -53,14 +60,15 @@ get_engine_parameters_from_workflow_id(){
   Use engine parameters to pull down the workflow
   '
   local ica_workflow_run_id="$1"
-  local ica_access_token="$2"
+  local ica_base_url="$2"
+  local ica_access_token="$3"
   curl \
     --silent \
     --fail \
     --location \
     --request GET \
     --header "Authorization: Bearer ${ica_access_token}" \
-    "${ICA_BASE_URL}/v1/workflows/runs/${ica_workflow_run_id}/?include=engineParameters" | \
+    "${ica_base_url}/v1/workflows/runs/${ica_workflow_run_id}/?include=engineParameters" | \
   jq \
     --raw-output \
     '.engineParameters | fromjson'
