@@ -96,7 +96,7 @@ runs:
 
         # Add functions
         rsync --archive \
-          "functions/" "release-${{ inputs.git_tag }}/internal-functions/"
+          "internal-functions/" "release-${{ inputs.git_tag }}/internal-functions/"
 
         # Add autocompletions
         rsync --archive \
