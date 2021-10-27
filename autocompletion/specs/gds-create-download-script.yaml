@@ -1,0 +1,17 @@
+---
+name: gds-create-download-script
+
+title: Create download script for a gds folder
+
+options:
+  - name: gds-path
+    type: string
+    summary: |
+      The gds folder path
+    completion:
+      command_string: |-
+        gds-ls "${CURRENT_WORD}"
+  - name: output-prefix
+    summary: |
+      The output-prefix of the final bash file
+    type: string
