@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+
+: '
+Create download script
+
+Generates a json object that is a list of keys containing the following elements
+
+1. Relative output path
+2. Presigned url
+3. File e-tag
+
+Then generates a file based on the template
+
+Step 0: Collect inputs
+* Output prefix
+* gds-path
+
+Step 1: Confirm directory exists
+
+Step 2: Collect all files from the directory and transform into list with the following attributes -
+* presigned_url
+* output_path (relative to directory)
+* etag  ( used to verify correct download )
+* file_size
+* time_modified
+
+# Write the following to template
+__OBJECT_STORE_AS_BASE64__
+__GDS_PATH__
+__SCRIPT_NAME__
+'
+
+# Set to fail
+set -euo pipefail
+
+# Globals
+TEMPLATE_NAME="gds-download-script.sh"
+
+###########
+# FUNCTIONS
+###########
+
+# Help function
+print_help(){
+  echo "
+        Usage: gds-create-download-script (--gds-path gds://volume-name/path-to-folder/) (--output-prefix output_prefix)
+
+        Description:
+          Create a script at <output_prefix>.sh that downloads all files in gds path
+
+        Options:
+            -g / --gds-path:      Required - Path to gds directory
+            --output-prefix:      Required - Output file prefix
+
+        Requirements:
+          * jq     (v1.5+)
+          * python3 (v3.4+)
+
+        Environment:
+          * ICA_BASE_URL
+          * ICA_ACCESS_TOKEN
+        "
+}
+
+###########
+# GET ARGS
+###########
+
+# Get args
+gds_path=""
+output_prefix=""
+template_path="${ICA_ICA_LAZY_HOME-}/templates/${TEMPLATE_NAME}"
+
+# Get args from command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -g | --gds-path)
+      gds_path="$2"
+      shift 1
+      ;;
+    --output-prefix)
+      output_prefix="$2"
+      shift 1
+      ;;
+    -h | --help)
+      print_help
+      exit 0
+      ;;
+  esac
+  shift 1
+done
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
+# Ensure gds_path param is set
+if [[ -z "${gds_path}" ]]; then
+  echo_stderr "Please make sure --gds-path parameter is set"
+  exit 1
+fi
+
+if [[ -z "${output_prefix}" ]]; then
+  echo_stderr "Please make sure --output-prefix parameter is set"
+  exit 1
+fi
+
+# Start
+if [[ -z "${ICA_BASE_URL-}" ]]; then
+    echo "Error: Need to set var \"ICA_BASE_URL\"" 1>&2
+    exit 1
+fi
+
+if [[ -z "${ICA_ACCESS_TOKEN-}" ]]; then
+    echo "Error: Need to set var \"ICA_ACCESS_TOKEN\"" 1>&2
+    echo "Error: Please first run ica-context-switcher" 1>&2
+    exit 1
+fi
+
+volume_name="$(get_volume_from_gds_path "${gds_path}")"
+folder_path="$(get_folder_path_from_gds_path "${gds_path}")"
+
+if ! check_path_is_folder "${volume_name}" "${folder_path}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"; then
+  echo_stderr "Could not confirm ${gds_path} was a path"
+fi
+
+# Get file list object as a gds file list
+file_list_obj="$(get_gds_file_list_as_digestible "${volume_name}" "${folder_path}" "true" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}")"
+
+# Create temp file with template
+temp_script_path="$(mktemp -t "${output_prefix}.XXX")"
+cp "${template_path}" "${temp_script_path}"
+
+# Write items to file
+"$(get_sed_binary)" -i "s%__OBJECT_STORE_AS_BASE64__%$(echo "${file_list_obj}" | base64 --wrap 0)%" "${temp_script_path}"
+"$(get_sed_binary)" -i "s%__GDS_PATH__%${gds_path}%" "${temp_script_path}"
+"$(get_sed_binary)" -i "s%__SCRIPT_NAME__%${output_prefix}.sh%" "${temp_script_path}"
+
+# Write temp path to final path
+mv "${temp_script_path}" "${output_prefix}.sh"
+
+# Convert to executable
+chmod +x "${output_prefix}.sh"
+
+# Write completion note
+echo_stderr "Now run 'bash ${output_prefix}.sh' to download your files"

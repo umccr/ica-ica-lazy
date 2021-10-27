@@ -197,15 +197,64 @@ check_path_is_folder(){
   fi
 }
 
+get_gds_file_list_as_digestible(){
+  : '
+  Return a list of gds files with the following attributes
+  * presigned_url
+  * output_path
+  * etag
+  * file_size
+
+  Where output_path has the gds_path_attr component stripped by sed and then return in compact-output format
+  for base64 ingestion
+  '
+  local volume_name="$1"
+  local gds_path_attr="$2"
+  local recursive="$3"
+  local ica_base_url="$4"
+  local ica_access_token="$5"
+  local files_obj
+  local files
+
+  curl \
+    --silent \
+    --location \
+    --fail \
+    --request GET \
+    --header "Authorization: Bearer ${ica_access_token}" \
+    --url "${ica_base_url}/v1/files" \
+    --get \
+    --data "volume.name=${volume_name}" \
+    --data "recursive=${recursive}" \
+    --data "pageSize=${MAX_PAGE_SIZE}" \
+    --data "include=presignedUrl" \
+    --data "path=${gds_path_attr}*" 2>/dev/null | \
+  jq \
+    --raw-output \
+    '.items[] |
+      {
+         "presigned_url": .presignedUrl,
+         "output_path": .path,
+         "etag": .eTag,
+         "file_size": .sizeInBytes,
+         "time_modified": .timeModified
+      }' | \
+  "$(get_sed_binary)" "s%\"output_path\": \"${gds_path_attr}%\"output_path\": \"%" |
+  jq \
+    --raw-output \
+    --compact-output
+}
+
 get_gds_file_names(){
   : '
-  list the files and the subfolders of the path that match
+  list the files of the path that match
   '
   local volume_name="$1"
   local gds_path_attr="$2"
   local name="$3"
-  local ica_base_url="$4"
-  local ica_access_token="$5"
+  local recursive="$4"
+  local ica_base_url="$5"
+  local ica_access_token="$6"
   local files_obj
   local files
 
@@ -218,7 +267,7 @@ get_gds_file_names(){
                  --url "${ica_base_url}/v1/files" \
                  --get \
                  --data "volume.name=${volume_name}" \
-                 --data "recursive=false" \
+                 --data "recursive=${recursive}" \
                  --data "pageSize=${MAX_PAGE_SIZE}" \
                  --data "path=${gds_path_attr}*" 2>/dev/null)"
 
@@ -296,7 +345,7 @@ gds_search(){
     if [[ "${type}" == "directory" ]]; then
       get_gds_subfolder_names "${volume_name}" "${folder_path}" "${name}" "${ica_base_url}" "${ica_access_token}"
     else
-      get_gds_file_names "${volume_name}" "${folder_path}" "${name}" "${ica_base_url}" "${ica_access_token}"
+      get_gds_file_names "${volume_name}" "${folder_path}" "${name}" "false" "${ica_base_url}" "${ica_access_token}"
     fi
   fi
 

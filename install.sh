@@ -5,6 +5,8 @@ The install.sh script completes the following steps
 
 1. Creates the directory ~/.ica-ica-lazy
 2. Adds functions to ~/.ica-ica-lazy/functions
+2a. Adds internal-functions to ~/.ica-ica-lazy/internal-functions
+2b. Adds templates to ~/.ica-ica-lazy/templates
 3. Adds scripts to ~/.ica-ica-lazy/scripts
 4. Adds autocompletions to ~/.ica-ica-lazy/autocomplete/<SHELL>/
 '
@@ -204,6 +206,14 @@ rsync --delete --archive \
 #########################
 rsync --delete --archive \
   "$(get_this_path)/internal-functions/" "${main_dir}/internal-functions/"
+
+
+################
+# COPY TEMPLATES
+################
+rsync --delete --archive \
+  "$(get_this_path)/templates/" "${main_dir}/templates/"
+
 
 #################
 # PRINT USER HELP

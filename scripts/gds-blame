@@ -104,6 +104,10 @@ fi
 # Check token expiry
 check_token_expiry "${ICA_ACCESS_TOKEN}"
 
+if ! binaries_check; then
+  exit 1
+fi
+
 # Get folder creator
 # Get volume path from gds path
 volume_name="$(get_volume_from_gds_path "${gds_path}")"
