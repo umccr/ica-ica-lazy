@@ -582,3 +582,67 @@ check_file_exists(){
   fi
 }
 
+upload_gds_file(){
+  : '
+  Upload a file to gds
+  '
+  local volume_name="$1"
+  local gds_file_path="$2"
+  local local_file_path="$3"
+  local base_url="$4"
+  local access_token="$5"
+
+  # Other local vars
+  local local_file_name
+
+  # Check file exists
+  if ! [[ -f "${local_file_path}" ]]; then
+    echo_stderr "Could not confirm ${local_file_path} exists"
+    return 1
+  fi
+
+  # File name
+  local_file_name="$(python3 -c "from pathlib import Path; print(Path('${local_file_path}').name)")"
+
+  # Create a json object as the --data-raw attribute
+  body_arg="$(jq --raw-output \
+                 --arg "name" "${local_file_name}" \
+                 --arg "volumeName" "${volume_name}" \
+                 --arg "folderPath" "${gds_file_path}/" \
+                 --arg "type" "application/json" \
+                 '. | .["name"]=$name | .["volumeName"]=$volumeName | .["folderPath"]=$folderPath' <<< '{}'
+            )"
+
+  # Pipe curl output into jq to collect ID and return
+  file_object="$(curl \
+    --silent \
+    --request POST \
+    --header 'Content-Type: application/json' \
+    --header "Authorization: Bearer ${access_token}" \
+    --data-raw "${body_arg}" \
+    "${base_url}/v1/files?include=objectStoreAccess")"
+
+  aws_upload_creds="$(jq \
+      --raw-output \
+      '.objectStoreAccess.awsS3TemporaryUploadCredentials' <<< "${file_object}")"
+
+  # Get creds
+  access_key_id="$(get_access_key_id_from_credentials "${aws_upload_creds}")"
+  secret_access_key="$(get_secret_access_key_from_credentials "${aws_upload_creds}")"
+  session_token="$(get_session_token_from_credentials "${aws_upload_creds}")"
+  region="$(get_region_from_credentials "${aws_upload_creds}")"
+  bucket_name="$(get_bucket_name_from_credentials "${aws_upload_creds}")"
+  key_prefix="$(get_key_prefix_from_credentials "${aws_upload_creds}")"
+
+  # Upload file
+  if ! AWS_ACCESS_KEY_ID="${access_key_id}" \
+       AWS_SECRET_ACCESS_KEY="${secret_access_key}" \
+       AWS_SESSION_TOKEN="${session_token}" \
+       AWS_REGION="${region}" \
+       aws s3 cp "${local_file_path}" "s3://${bucket_name}/${key_prefix}" 1>&2; then
+    return 1
+  fi
+
+  # Otherwise return the file id
+  jq --raw-output '.id' <<< "${file_object}"
+}

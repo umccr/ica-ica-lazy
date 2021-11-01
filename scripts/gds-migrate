@@ -1,0 +1,278 @@
+#!/usr/bin/env bash
+
+: '
+Migrate a directory from one project to another.
+
+User must have read access to the source directory, and contributor access to the destination project
+
+Step 1: Get the urls from the destination project (similar to gds-create-download-script)
+Step 2: Create the manifest file and upload to the development project (outside the destination directory)
+Step 3: Create output folder in the source directory and get credentials
+Step 4: Run TES task - populating the following attributes from the task run template
+__GDS_MANIFEST_JSON_URL__
+__AWS_S3_BUCKET__
+__AWS_S3_PATH__
+__AWS_ACCESS_KEY_ID__
+__AWS_SECRET_ACCESS_KEY__
+__AWS_SESSION_TOKEN__
+__GDS_SYSTEM_FILES_PATH__
+Step 5: If --wait is set, continue and then delete output system files at the end
+'
+
+# Set to fail
+set -euo pipefail
+
+# Globals
+TEMPLATE_NAME="gds-migrate-task-run.json"
+
+###########
+# FUNCTIONS
+###########
+
+# Help function
+print_help(){
+  echo "
+        Usage: gds-migrate (--src-path gds://volume-name/path-to-src-folder/) (--src-project <project-name>)
+                           (--dest-path gds://volume-name/path-to-dest-folder/) (--dest-project <project-name>)
+
+        Description:
+          Copy data from one project folder to a folder in another project context
+
+        Options:
+            --src-path:          path to gds source directory
+            --src-project:       name of the source project
+            --dest-path:         path to gds dest directory
+            --dest-project:      name of the destination project
+
+        Requirements:
+          * aws
+          * jq     (v1.5+)
+          * python3 (v3.4+)
+
+        Environment:
+          * ICA_BASE_URL
+
+        A token with at least read-only scope must be registered for the source path.
+        A taken with at least contributor scope must be registered for the destination path
+        "
+}
+
+###########
+# GET ARGS
+###########
+
+# Get args
+src_gds_path=""
+src_project=""
+dest_gds_path=""
+dest_project=""
+template_path="${ICA_ICA_LAZY_HOME-}/templates/${TEMPLATE_NAME}"
+
+# Get args from command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --src-path)
+      src_gds_path="$2"
+      shift 1
+      ;;
+    --src-project)
+      src_project="$2"
+      shift 1
+      ;;
+    --dest-path)
+      dest_gds_path="$2"
+      shift 1
+      ;;
+    --dest-project)
+      dest_project="$2"
+      shift 1
+      ;;
+    -h | --help)
+      print_help
+      exit 0
+      ;;
+  esac
+  shift 1
+done
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
+# Ensure gds_path params are set
+if [[ -z "${src_gds_path}" ]]; then
+  echo_stderr "Please make sure --src-path parameter is set"
+  exit 1
+fi
+if [[ -z "${dest_gds_path}" ]]; then
+  echo_stderr "Please make sure --dest-path parameter is set"
+  exit 1
+fi
+
+# Ensure projects are set
+if [[ -z "${src_project}" ]]; then
+  echo_stderr "Please make sure --src-path parameter is set"
+  exit 1
+fi
+if [[ -z "${dest_project}" ]]; then
+  echo_stderr "Please make sure --dest-path parameter is set"
+  exit 1
+fi
+
+# Make sure src and dest projects aren't the same
+if [[ "${src_project}" == "${dest_project}" ]]; then
+  echo_stderr "Please make sure --src-project and --dest-project parameter values are different"
+  exit 1
+fi
+
+# Start
+if [[ -z "${ICA_BASE_URL-}" ]]; then
+    echo "Error: Need to set var \"ICA_BASE_URL\"" 1>&2
+    exit 1
+fi
+
+# Get source token
+# Check project name in TOKENS PATH
+if [[ -z "$(jq --raw-output --arg project "${src_project}" 'select(.[$project] != null) | .[$project] | keys' <<< cat "$(get_tokens_path "${ICA_ICA_LAZY_HOME}")")" ]]; then
+  echo_stderr "Error: Could not get project '${src_project}' from tokens path"
+  exit 1
+fi
+
+# Get access token
+src_project_access_token="$(get_access_token "${src_project}" "read-only" "$(get_tokens_path "${ICA_ICA_LAZY_HOME}")")"
+# Try admin scope
+if [[ -z "${src_project_access_token}" || "${src_project_access_token}" == "null" ]]; then
+  src_project_access_token="$(get_access_token "${src_project}" "admin" "$(get_tokens_path "${ICA_ICA_LAZY_HOME}")")"
+fi
+
+# Get the admin scope
+dest_project_access_token="$(get_access_token "${dest_project}" "admin" "$(get_tokens_path "${ICA_ICA_LAZY_HOME}")")"
+# Try admin scope
+if [[ -z "${dest_project_access_token}" || "${dest_project_access_token}" == "null" ]]; then
+  echo_stderr "Need admin permissions from the destination directory"
+fi
+
+# Get the src stuff volume name / folder path
+src_volume_name="$(get_volume_from_gds_path "${src_gds_path}")"
+src_folder_path="$(get_folder_path_from_gds_path "${src_gds_path}")"
+
+if ! check_path_is_folder "${src_volume_name}" "${src_folder_path}" "${ICA_BASE_URL}" "${src_project_access_token}"; then
+  echo_stderr "Could not confirm ${src_gds_path} was a valid gds path in the ${src_project} context"
+fi
+
+# Get the dest stuff
+dest_volume_name="$(get_volume_from_gds_path "${dest_gds_path}")"
+dest_folder_path="$(get_folder_path_from_gds_path "${dest_gds_path}")"
+# Split path into name and parent
+dest_folder_parent="$(get_folder_parent_from_folder_path "${dest_folder_path}")"
+dest_folder_name="$(get_folder_name_from_folder_path "${dest_folder_path}")"
+
+# Create the folder in gds
+if ! dest_folder_id="$(get_folder_id "${dest_volume_name}" "${dest_folder_path}" "${ICA_BASE_URL}" "${dest_project_access_token}")"; then
+  echo_stderr "Creating the gds folder \"${dest_gds_path}\""
+  dest_folder_id="$(create_gds_folder "${dest_volume_name}" "${dest_folder_parent}" "${dest_folder_name}" "${ICA_BASE_URL}" "${dest_project_access_token}")"
+  # Now re-check folder was created successfully
+  if [[ -z "${dest_folder_id}" || "${dest_folder_id}" == "null"  ]]; then
+    echo_stderr "Creation of folder \"gds://${dest_volume_name}${dest_folder_path}\" failed"
+    exit 1
+  fi
+fi
+
+# Get file list object as a gds file list in the source
+echo_stderr "Collecting presigned urls from source path"
+file_list_obj="$(get_gds_file_list_as_digestible "${src_volume_name}" "${src_folder_path}" "true" "${ICA_BASE_URL}" "${src_project_access_token}")"
+
+# Reshape json and write out
+temp_manifest_path="$(mktemp -t "manifest.XXX.json")"
+jq --raw-output \
+  '{url: .presigned_url, size: .file_size, path: .output_path}' <<< "${file_list_obj}" | \
+jq --raw-output --slurp > "${temp_manifest_path}"
+
+# Upload manifest
+echo_stderr "Uploading file ${temp_manifest_path} to gds://${dest_volume_name}${dest_folder_parent}"
+manifest_file_id="$(upload_gds_file "${dest_volume_name}" "${dest_folder_parent}" "${temp_manifest_path}" "${ICA_BASE_URL}" "${dest_project_access_token}")"
+
+# Get presigned url
+iter_counter=0
+while :; do
+  if [[ "${iter_counter}" -gt 5 ]]; then
+    echo_stderr "Could not get manifest presigned url after 30 seconds, exiting"
+    exit
+  fi
+  # Get the manifest presigned url
+  manifest_presigned_url="$(get_presigned_url_from_file_id "${manifest_file_id}" "${ICA_BASE_URL}" "${dest_project_access_token}")"
+
+  if [[ -z "${manifest_presigned_url}" || "${manifest_presigned_url}" == "null" ]]; then
+    echo_stderr "Could not get manifest presigned url, sleeping five seconds and then trying again"
+    sleep 5
+    # Increment counter then sleep
+    iter_counter="$((iter_counter + 1))"
+    continue
+  else
+    break
+  fi
+
+done
+
+echo_stderr "Uploaded manifest file of presigned urls - deleting local tmp copy"
+rm "${temp_manifest_path}"
+
+# Get the json aws creds with the curl PATCH command
+echo_stderr "Getting AWS credentials of output folder"
+dest_aws_credentials="$(get_aws_access_creds_from_folder_id "${dest_folder_id}" "${ICA_BASE_URL}" "${dest_project_access_token}")"
+
+# Creds to be exported
+dest_aws_access_key_id="$(get_access_key_id_from_credentials "${dest_aws_credentials}")"
+dest_aws_secret_access_key="$(get_secret_access_key_from_credentials "${dest_aws_credentials}")"
+dest_aws_session_token="$(get_session_token_from_credentials "${dest_aws_credentials}")"
+dest_aws_region="$(get_region_from_credentials "${dest_aws_credentials}")"
+
+# Components of positional parameter 1
+dest_aws_bucket_name="$(get_bucket_name_from_credentials "${dest_aws_credentials}")"
+dest_aws_key_prefix="$(get_key_prefix_from_credentials "${dest_aws_credentials}")"
+
+# Create temp file with template
+temp_test_migration_path="$(mktemp -t "tes-migrate.XXX.json")"
+cp "${template_path}" "${temp_test_migration_path}"
+
+# Update template TES json
+echo_stderr "Populating TES task template"
+"$(get_sed_binary)" -i "s#__GDS_MANIFEST_JSON_URL__#${manifest_presigned_url//&/\\&}#" "${temp_test_migration_path}"
+"$(get_sed_binary)" -i "s%__AWS_S3_BUCKET__%${dest_aws_bucket_name}%" "${temp_test_migration_path}"
+"$(get_sed_binary)" -i "s%__AWS_S3_PATH__%${dest_aws_key_prefix}%" "${temp_test_migration_path}"
+"$(get_sed_binary)" -i "s%__AWS_ACCESS_KEY_ID__%${dest_aws_access_key_id}%" "${temp_test_migration_path}"
+"$(get_sed_binary)" -i "s%__AWS_SECRET_ACCESS_KEY__%${dest_aws_secret_access_key}%" "${temp_test_migration_path}"
+"$(get_sed_binary)" -i "s%__AWS_SESSION_TOKEN__%${dest_aws_session_token}%" "${temp_test_migration_path}"
+"$(get_sed_binary)" -i "s%__AWS_REGION__%${dest_aws_region}%" "${temp_test_migration_path}"
+"$(get_sed_binary)" -i "s%__GDS_SYSTEM_FILES_PATH__%gds://${dest_volume_name}${dest_folder_parent}/migration_logs%" "${temp_test_migration_path}"
+
+# Launch the tes task
+echo_stderr "Launching TES task"
+tes_task_id="$(curl \
+    --silent \
+    --fail \
+    --location \
+    --request POST \
+    --header 'Accept: application/json' \
+    --header 'Content-Type: application/*+json' \
+    --header "Authorization: Bearer ${dest_project_access_token}" \
+    --data "@${temp_test_migration_path}" \
+    --url "${ICA_BASE_URL}/v1/tasks/runs" |
+    jq '.id')"
+
+echo_stderr "Launching data transfer with task run ${tes_task_id}"
+echo_stderr "Once the migration task is complete you may remove the log directory \"gds://${dest_volume_name}${dest_folder_parent}/migration_logs\""
+
+rm "${temp_test_migration_path}"

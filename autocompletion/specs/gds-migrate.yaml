@@ -1,0 +1,28 @@
+---
+name: gds-migrate
+
+title: Copy directory from one project to another
+
+options:
+  - name: src-path
+    type: string
+    summary: |
+      The source gds folder path
+    completion:
+      command_string: |-
+        gds-ls "${CURRENT_WORD}"
+  - name: src-project
+    type: string
+    summary: |
+      The source gds project
+  - name: dest-path
+    type: string
+    summary: |
+      The destination gds folder path
+    completion:
+      command_string: |-
+        gds-ls "${CURRENT_WORD}"
+  - name: dest-project
+    type: string
+    summary: |
+      The destination gds project

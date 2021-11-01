@@ -1,0 +1,39 @@
+{
+  "name": "gds-migrate",
+  "execution": {
+    "image": {
+      "name": "alpine",
+      "tag": "latest"
+    },
+    "command": [ "cp" ],
+    "args": [
+      "-r", "/media/inputs/.", "/media/outputs/"
+    ],
+    "inputs": {
+      "type": "manifest",
+      "mode": "download",
+      "url": "__GDS_MANIFEST_JSON_URL__",
+      "path": "/manifest/mount/path"
+    },
+    "outputs": {
+      "path": "/media/outputs/",
+      "url": "s3://__AWS_S3_BUCKET__/__AWS_S3_PATH__",
+      "storageProvider": "aws",
+      "credentials": {
+        "AWS_ACCESS_KEY_ID": "__AWS_ACCESS_KEY_ID__",
+        "AWS_SECRET_ACCESS_KEY": "__AWS_SECRET_ACCESS_KEY__",
+        "AWS_SESSION_TOKEN": "__AWS_SESSION_TOKEN__"
+      }
+    },
+    "systemFiles": {
+      "url": "__GDS_SYSTEM_FILES_PATH__"
+    },
+    "environment": {
+      "resources": {
+        "type": "standardhicpu",
+        "size": "medium"
+      }
+    },
+    "retryLimit": 0
+  }
+}
