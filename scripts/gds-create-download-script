@@ -144,7 +144,10 @@ temp_script_path="$(mktemp -t "${output_prefix}.XXX")"
 cp "${template_path}" "${temp_script_path}"
 
 # Write items to file
-"$(get_sed_binary)" -i "s%__OBJECT_STORE_AS_BASE64__%$(echo "${file_list_obj}" | base64 --wrap 0)%" "${temp_script_path}"
+# Credit: https://unix.stackexchange.com/questions/284170/replace-a-long-string-with-the-sed-command-argument-list-too-long-error
+"$(get_sed_binary)" -i -f - "${temp_script_path}" << EOF
+s%__OBJECT_STORE_AS_BASE64__%$(echo "${file_list_obj}" | gzip | base64 --wrap 0)%
+EOF
 "$(get_sed_binary)" -i "s%__GDS_PATH__%${gds_path}%" "${temp_script_path}"
 "$(get_sed_binary)" -i "s%__SCRIPT_NAME__%${output_prefix}.sh%" "${temp_script_path}"
 
