@@ -15,7 +15,7 @@ get_inputs_from_cwl_definition(){
 
   jq --raw-output '(
          if (.["$graph"] | length) !=0 then
-             .["$graph"][-1]
+             .["$graph"] | select(.id == ("#main"))
          else
              .
          end) |
@@ -153,6 +153,7 @@ check_input_paths_and_locations(){
        # Check input block is present
        if [[ -z "${input_block}" ]]; then
          echo_stderr "Error! '${input_key}' is not a recognised input of the workflow"
+         echo_stderr "Error: got '${input_key_lstripped}'"
          all_there=1
        fi
 
