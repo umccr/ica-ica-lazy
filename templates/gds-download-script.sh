@@ -223,14 +223,8 @@ fi
 
 OBJECT_STORE="__OBJECT_STORE_AS_BASE64__"
 
-object_base64_by_line="$(echo "${OBJECT_STORE}" | {
-                          # Decode object
-                          "$(get_base64_binary)" \
-                            --decode | {
-                          # Base64 is gzip compressed
-                          gunzip
-                          }
-                        })"
+object_base64_by_line="$("$(get_base64_binary)" --decode <<< "${OBJECT_STORE}" | \
+                         gunzip)"
 
 # Then reiterate over each and re-decode
 # Credit https://www.starkandwayne.com/blog/bash-for-loop-over-json-array-using-jq/

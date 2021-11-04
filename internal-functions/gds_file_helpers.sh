@@ -213,36 +213,65 @@ get_gds_file_list_as_digestible(){
   local recursive="$3"
   local ica_base_url="$4"
   local ica_access_token="$5"
+  local all_files_obj
   local files_obj
   local files
+  local next_page_token
+  local data_params
 
-  curl \
-    --silent \
-    --location \
-    --fail \
-    --request GET \
-    --header "Authorization: Bearer ${ica_access_token}" \
-    --url "${ica_base_url}/v1/files" \
-    --get \
-    --data "volume.name=${volume_name}" \
-    --data "recursive=${recursive}" \
-    --data "pageSize=${MAX_PAGE_SIZE}" \
-    --data "include=presignedUrl" \
-    --data "path=${gds_path_attr}*" 2>/dev/null | \
-  jq \
-    --raw-output \
-    '.items[] |
-      {
-         "presigned_url": .presignedUrl,
-         "output_path": .path,
-         "etag": .eTag,
-         "file_size": .sizeInBytes,
-         "time_modified": .timeModified
-      }' | \
-  "$(get_sed_binary)" "s%\"output_path\": \"${gds_path_attr}%\"output_path\": \"%" |
-  jq \
-    --raw-output \
-    --compact-output
+  next_page_token="null"
+  all_files_obj="[]"
+
+  while :; do
+    data_params=( "--data" "volume.name=${volume_name}"
+                  "--data" "recursive=${recursive}"
+                  "--data" "pageSize=${MAX_PAGE_SIZE}"
+                  "--data" "include=presignedUrl"
+                  "--data" "path=${gds_path_attr}*" )
+    if [[ ! "${next_page_token}" == "null" ]]; then
+      data_params+=( "--data" "pageToken=${next_page_token}" )
+    fi
+    # Response
+    response="$(curl \
+                   --silent \
+                   --location \
+                   --fail \
+                   --request GET \
+                   --header "Authorization: Bearer ${ica_access_token}" \
+                   --url "${ica_base_url}/v1/files" \
+                   --get \
+                   "${data_params[@]}"  2>/dev/null)"
+
+    # Assign token
+    next_page_token="$(jq -r '.nextPageToken' <<< "${response}")"
+
+    files_obj="$(jq \
+                  --raw-output \
+                  '.items[] |
+                    {
+                       "presigned_url": .presignedUrl,
+                       "output_path": .path,
+                       "etag": .eTag,
+                       "file_size": .sizeInBytes,
+                       "time_modified": .timeModified
+                    }' <<< "${response}" | {
+                   # Strip to the relative path
+                   "$(get_sed_binary)" "s%\"output_path\": \"${gds_path_attr}%\"output_path\": \"%"
+                 } | {
+                   # Append to the existing and get output as compact
+                   jq \
+                     --raw-output \
+                     --compact-output
+                 })"
+    all_files_obj="$(jq 'flatten' --raw-output --slurp <<< "${all_files_obj}${files_obj}")"
+    # Break if no more items
+    if [[ "${next_page_token}" == "null" ]]; then
+      break
+    fi
+  done
+
+  # Write output line by line
+  jq --raw-output '.[]' <<< "${all_files_obj}"
 }
 
 get_gds_file_names(){
