@@ -11,8 +11,9 @@ get_workflow_run_ids(){
   : '
   Get the list of workflow run ids
   '
-  local ica_base_url="$1"
-  local ica_access_token="$2"
+  local status="$1"
+  local ica_base_url="$2"
+  local ica_access_token="$3"
 
   local response
   local next_page_token
@@ -24,13 +25,20 @@ get_workflow_run_ids(){
   url="${ica_base_url}/v1/workflows/runs"
 
   while :; do
-    data_params=( "--data" "status=succeeded"
-                  "--data" "pageSize=${MAX_PAGE_SIZE}"
+    data_params=( "--data" "pageSize=${MAX_PAGE_SIZE}"
                   "--data" "sort=timeCreated+desc"
                   "--data" "include=totalItemCount" )
+
+    if [[ ! "${status}" == "all" ]]; then
+      data_params+=( "--data" "status=${status}" )
+    fi
+
+    # Check next token
     if [[ ! "${next_page_token}" == "null" ]]; then
       data_params+=( "--data" "pageToken=${next_page_token}" )
     fi
+
+
     response="$(curl \
                   --silent \
                   --fail \
@@ -71,7 +79,7 @@ get_engine_parameters_from_workflow_id(){
     "${ica_base_url}/v1/workflows/runs/${ica_workflow_run_id}/?include=engineParameters" | \
   jq \
     --raw-output \
-    '.engineParameters | fromjson'
+    '.engineParameters // empty | fromjson'
 }
 
 get_definition_from_ica(){

@@ -124,7 +124,7 @@ echo "The directory '${gds_path}' was created by user '${creator_username}'"
 echo "Now checking if this directory was created by a workflow run."
 
 # Read the array of workflow ids
-readarray -t workflow_run_id_array < <(get_workflow_run_ids "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}")
+readarray -t workflow_run_id_array < <(get_workflow_run_ids "all" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}")
 
 # We only print the header of 'this directory was created by the following workflow run ids if one present'
 has_match=0
@@ -141,6 +141,12 @@ for workflow_run_id in "${workflow_run_id_array[@]}"; do
   workflow_run_counter="$((workflow_run_counter + 1))"
   # Get engine parameters
   engine_parameters="$(get_engine_parameters_from_workflow_id "${workflow_run_id}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}")"
+
+  # Check engine parameters are not null
+  if [[ -z "${engine_parameters}" || "${engine_parameters}" == "null" ]]; then
+    echo_stderr "Could not get engine parameters for ${workflow_run_id}"
+    continue
+  fi
 
   # Get directories
   output_directory="$(jq --raw-output '.outputDirectory' <<< "${engine_parameters}")/"
