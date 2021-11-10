@@ -140,7 +140,7 @@ fi
 file_list_obj="$(get_gds_file_list_as_digestible "${volume_name}" "${folder_path}" "true" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}")"
 
 # Create temp file with template
-temp_script_path="$(mktemp -t "${output_prefix}.XXX")"
+temp_script_path="$("$(get_mktemp_binary)" -t "${output_prefix}.XXX")"
 cp "${template_path}" "${temp_script_path}"
 
 # Write items to file

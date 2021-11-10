@@ -195,7 +195,7 @@ echo_stderr "Collecting presigned urls from source path"
 file_list_obj="$(get_gds_file_list_as_digestible "${src_volume_name}" "${src_folder_path}" "true" "${ICA_BASE_URL}" "${src_project_access_token}")"
 
 # Reshape json and write out
-temp_manifest_path="$(mktemp -t "manifest.XXX.json")"
+temp_manifest_path="$("$(get_mktemp_binary)" -t "manifest.XXX.json")"
 jq --raw-output \
   '{url: .presigned_url, size: .file_size, path: .output_path}' <<< "${file_list_obj}" | \
 jq --raw-output --slurp > "${temp_manifest_path}"
@@ -244,7 +244,7 @@ dest_aws_bucket_name="$(get_bucket_name_from_credentials "${dest_aws_credentials
 dest_aws_key_prefix="$(get_key_prefix_from_credentials "${dest_aws_credentials}")"
 
 # Create temp file with template
-temp_test_migration_path="$(mktemp -t "tes-migrate.XXX.json")"
+temp_test_migration_path="$("$(get_mktemp_binary)" -t "tes-migrate.XXX.json")"
 cp "${template_path}" "${temp_test_migration_path}"
 
 # Update template TES json

@@ -16,6 +16,14 @@ get_base64_binary(){
   fi
 }
 
+get_mktemp_binary(){
+  if [[ "${OSTYPE}" == "darwin"* ]]; then
+    echo "gmktemp"
+  else
+    echo "mktemp"
+  fi
+}
+
 get_printf_binary(){
   if [[ "${OSTYPE}" == "darwin"* ]]; then
     echo "gprintf"

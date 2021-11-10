@@ -34,6 +34,14 @@ get_dd_binary(){
   fi
 }
 
+get_mktemp_binary(){
+  if [[ "${OSTYPE}" == "darwin"* ]]; then
+    echo "gmktemp"
+  else
+    echo "mktemp"
+  fi
+}
+
 get_sed_binary(){
   if [[ "${OSTYPE}" == "darwin"* ]]; then
     echo "gsed"
@@ -136,7 +144,7 @@ compute_local_etag(){
   fi
 
   # Otherwise we need to go this in multiple checks
-  checksum_file="$(mktemp -t "checksum_file.$(basename "${file_path}").XXX")"
+  checksum_file="$("$(get_mktemp_binary)" -t "checksum_file.$(basename "${file_path}").XXX")"
 
   # Set iter
   part_iter=0
