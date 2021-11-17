@@ -50,14 +50,10 @@ get_task_log_file(){
     --request GET \
     --header "Authorization: Bearer ${access_token}" \
     "${base_url}/v1/tasks/runs/${task_id}" | \
-  "$(get_docker_binary)" run \
-    --rm \
-    --interactive \
-    --entrypoint jq \
-    "quay.io/umccr/alpine-jq:1.6" \
-      --arg "log_file_key" "${log_file_key}" \
-      --raw-output \
-      '.logs[] | .[$log_file_key]'
+  jq \
+    --raw-output \
+    --arg "log_file_key" "${log_file_key}" \
+    '.logs[] | .[$log_file_key]'
 }
 
 # Initialise variables

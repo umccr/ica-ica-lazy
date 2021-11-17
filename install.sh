@@ -75,8 +75,12 @@ binaries_check(){
   : '
   Check each of the required binaries are available
   '
-  if ! (type "$(get_docker_binary)" aws curl jq pass python3 rsync 1>/dev/null); then
+  if ! (type aws curl jq pass python3 rsync 1>/dev/null); then
     return 1
+  fi
+
+  if ! (type "$(get_docker_binary)" 1>/dev/null 2>&1); then
+    echo_stderr "Warning: docker/podman is not installed. Required by ica-illumination, and for default gds-view output"
   fi
 }
 
