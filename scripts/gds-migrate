@@ -197,7 +197,7 @@ file_list_obj="$(get_gds_file_list_as_digestible "${src_volume_name}" "${src_fol
 # Reshape json and write out
 temp_manifest_path="$("$(get_mktemp_binary)" -t "manifest.XXX.json")"
 jq --raw-output \
-  '{url: .presigned_url, size: .file_size, path: .output_path}' <<< "${file_list_obj}" | \
+  '. | select(.file_size != 0) | {url: .presigned_url, size: .file_size, path: .output_path}' <<< "${file_list_obj}" | \
 jq --raw-output --slurp > "${temp_manifest_path}"
 
 # Upload manifest
