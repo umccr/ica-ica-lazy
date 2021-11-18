@@ -152,6 +152,7 @@ ica-context-switcher(){
 
   if [[ -z "${ica_access_token}" || "${ica_access_token}" == "null" ]]; then
     _echo_stderr "Could not get token for project \"${project_name}\", scope level \"${scope}\". Please first run \"ica-add-access-token\" --project-name \"${project_name}\" --scope \"${scope}\""
+    return 1
   fi
 
   # Export the access token
