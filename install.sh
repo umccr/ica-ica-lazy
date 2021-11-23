@@ -137,7 +137,7 @@ user_shell="$(get_user_shell)"
 # Check bash version
 if [[ "${user_shell}" == "bash" ]]; then
   echo_stderr "Checking bash version"
-  if [[ "$( "${SHELL}" -c "echo \"\${BASH_VERSION}\" 2>/dev/null" | cut -d'.' -f1)" -le "4" ]]; then
+  if [[ "$( "${SHELL}" -c "echo \"\${BASH_VERSION}\" 2>/dev/null" | cut -d'.' -f1)" -lt "4" ]]; then
     echo_stderr "Please upgrade to bash version 4 or higher, if you are running MacOS then please run the following commands"
     echo_stderr "brew install bash"
     echo_stderr "sudo bash -c \"echo \$(brew --prefix)/bin/bash >> /etc/shells\""
