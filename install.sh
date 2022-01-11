@@ -18,7 +18,7 @@ set -euo pipefail
 #########
 
 main_dir="${HOME}/.ica-ica-lazy"
-default_api_key_path="/ica/api-keys/default-api-key"
+api_key_path="${ICA_ICA_LAZY_DEFAULT_API_KEY_PATH-/ica/api-keys/default-api-key}"
 
 help_message="Usage: install.sh
 Installs ica-ica-lazy software and scripts into users home directory'.
@@ -171,12 +171,12 @@ if [[ "${OSTYPE}" == "darwin"* ]]; then
 fi
 
 # Check pass db
-echo_stderr "Checking pass db has a value at /ica/api-keys/default-api-key"
+echo_stderr "Checking pass db has a value at ${api_key_path}"
 echo_stderr "You may be prompted for your gpg password in a few seconds"
 sleep 4
 
-if ! pass "${default_api_key_path}" 1>/dev/null; then
-  echo_stderr "Could not confirm an api key at /ica/api-keys/default-api-key in your pass db"
+if ! pass "${api_key_path}" 1>/dev/null; then
+  echo_stderr "Could not confirm an api key at ${api_key_path} in your pass db"
   exit 1
 fi
 

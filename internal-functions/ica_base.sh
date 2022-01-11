@@ -164,7 +164,7 @@ get_default_api_key(){
   : '
   Gets the api key from /ica/api-keys/default-api-key in users password store
   '
-  pass "${DEFAULT_API_KEY_STORE_PATH}" 2>/dev/null
+  pass "${API_KEY_STORE_PATH}" 2>/dev/null
 }
 
 
