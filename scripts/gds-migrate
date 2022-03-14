@@ -34,6 +34,8 @@ print_help(){
   echo "
         Usage: gds-migrate (--src-path gds://volume-name/path-to-src-folder/) (--src-project <project-name>)
                            (--dest-path gds://volume-name/path-to-dest-folder/) (--dest-project <project-name>)
+                           [--rsync-args <rsync-args>]
+                           [--stream]
 
         Description:
           Copy data from one project folder to a folder in another project context
@@ -43,6 +45,8 @@ print_help(){
             --src-project:       name of the source project
             --dest-path:         path to gds dest directory
             --dest-project:      name of the destination project
+            --rsync-args:        comma separated string of rsync args, --archive is included as standard
+            --stream:            Use stream mode for inputs, download is default
 
         Requirements:
           * aws
@@ -54,6 +58,9 @@ print_help(){
 
         A token with at least read-only scope must be registered for the source path.
         A taken with at least contributor scope must be registered for the destination path
+
+        Example:
+          gds-migrate --src-project production --src-path gds://production/primary_data/2020_FCID/ --dest-project development --dest-path gds://development/primary_data/2021_FCID/ --rsync-args '--include=*/,--include=*.fastq.gz,--exclude=*'
         "
 }
 
@@ -66,6 +73,9 @@ src_gds_path=""
 src_project=""
 dest_gds_path=""
 dest_project=""
+rsync_args=""
+rsync_array=""
+input_mode="download"
 template_path="${ICA_ICA_LAZY_HOME-}/templates/${TEMPLATE_NAME}"
 
 # Get args from command line
@@ -86,6 +96,13 @@ while [ $# -gt 0 ]; do
     --dest-project)
       dest_project="$2"
       shift 1
+      ;;
+    --rsync-args)
+      rsync_args="$2"
+      shift 1
+      ;;
+    --stream)
+      input_mode="stream"
       ;;
     -h | --help)
       print_help
@@ -136,6 +153,9 @@ if [[ "${src_project}" == "${dest_project}" ]]; then
   echo_stderr "Please make sure --src-project and --dest-project parameter values are different"
   exit 1
 fi
+
+# Read through rsync args
+readarray -d',' rsync_array <<< "${rsync_args}"
 
 # Start
 if [[ -z "${ICA_BASE_URL-}" ]]; then
@@ -223,7 +243,6 @@ while :; do
   else
     break
   fi
-
 done
 
 echo_stderr "Uploaded manifest file of presigned urls - deleting local tmp copy"
@@ -257,6 +276,20 @@ echo_stderr "Populating TES task template"
 "$(get_sed_binary)" -i "s%__AWS_SESSION_TOKEN__%${dest_aws_session_token}%" "${temp_test_migration_path}"
 "$(get_sed_binary)" -i "s%__AWS_REGION__%${dest_aws_region}%" "${temp_test_migration_path}"
 "$(get_sed_binary)" -i "s%__GDS_SYSTEM_FILES_PATH__%gds://${dest_volume_name}${dest_folder_parent}/migration_logs%" "${temp_test_migration_path}"
+
+# Add in rsync args
+rsync_str="\"--archive\", "
+for rsync_arg in "${rsync_array[@]}"; do
+  rsync_arg="${rsync_arg%,}"
+  rsync_arg="${rsync_arg%$'\n'}"
+  if [[ -n "${rsync_arg}" ]]; then
+    rsync_str+="\"${rsync_arg%,}\", "
+  fi
+done
+"$(get_sed_binary)" -i "s%__ADDITIONAL_RSYNC_ARGS__%${rsync_str}%" "${temp_test_migration_path}"
+
+# Determine if stream or download
+"$(get_sed_binary)" -i "s%__STREAM_OR_DOWNLOAD__%${input_mode}%" "${temp_test_migration_path}"
 
 # Launch the tes task
 echo_stderr "Launching TES task"
