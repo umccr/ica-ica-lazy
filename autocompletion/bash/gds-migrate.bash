@@ -20,6 +20,8 @@ _gds-migrate() {
 ' '--src-project' 'The source gds project
 ' '--dest-path' 'The destination gds folder path
 ' '--dest-project' 'The destination gds project
+' '--rsync-args' 'Comma separated list of rsync args
+' '--stream' 'Stream inputs rather than download into container
 ')
     __gds-migrate_handle_options_flags
 
@@ -33,6 +35,10 @@ _gds-migrate() {
         _gds-migrate__option_dest_path_completion
       ;;
       --dest-project)
+      ;;
+      --rsync-args)
+      ;;
+      --stream)
       ;;
 
     esac

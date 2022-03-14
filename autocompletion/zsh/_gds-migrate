@@ -18,6 +18,10 @@ _gds-migrate() {
 ]:dest-path:_gds-migrate__option_dest_path_completion' \
             '--dest-project[The destination gds project
 ]:dest-project' \
+            '--rsync-args[Comma separated list of rsync args
+]:rsync-args' \
+            '--stream[Stream inputs rather than download into container
+]:stream' \
             '--help[Show command help]' \
             '-h[Show command help]' \
             && ret=0
