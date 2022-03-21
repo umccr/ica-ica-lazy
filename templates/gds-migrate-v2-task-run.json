@@ -1,0 +1,51 @@
+{
+  "name": "gds-migrate-v2",
+  "execution": {
+    "image": {
+      "name": "ghcr.io/instrumentisto/rsync-ssh",
+      "tag": "alpine3.15"
+    },
+    "command": "rsync",
+    "args": [
+      __ADDITIONAL_RSYNC_ARGS__
+      "/mount/mount/media/inputs/",
+      "/mount/mount/media/outputs/"
+    ],
+    "inputs": [
+      {
+        "type": "manifest",
+        "mode": "__STREAM_OR_DOWNLOAD__",
+        "url": "__GDS_MANIFEST_JSON_URL__",
+        "path": "/mount/mount/media/inputs/"
+      }
+    ],
+    "outputs": [
+      {
+        "path": "/mount/mount/media/outputs/",
+        "url": "s3://__AWS_S3_BUCKET__/__AWS_S3_PATH__",
+        "storageProvider": "aws",
+        "credentials": {
+          "AWS_ACCESS_KEY_ID": "__AWS_ACCESS_KEY_ID__",
+          "AWS_SECRET_ACCESS_KEY": "__AWS_SECRET_ACCESS_KEY__",
+          "AWS_SESSION_TOKEN": "__AWS_SESSION_TOKEN__"
+        }
+      }
+    ],
+    "systemFiles": {
+      "url": "s3://__AWS_S3_BUCKET_LOGS__/__AWS_S3_PATH_LOGS__",
+      "storageProvider": "aws",
+      "credentials": {
+          "AWS_ACCESS_KEY_ID": "__AWS_ACCESS_KEY_ID_LOGS__",
+          "AWS_SECRET_ACCESS_KEY": "__AWS_SECRET_ACCESS_KEY_LOGS__",
+          "AWS_SESSION_TOKEN": "__AWS_SESSION_TOKEN_LOGS__"
+      }
+    },
+    "environment": {
+      "resources": {
+        "type": "standardhicpu",
+        "size": "small"
+      }
+    },
+    "retryLimit": 0
+  }
+}

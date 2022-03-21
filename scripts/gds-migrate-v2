@@ -1,0 +1,400 @@
+#!/usr/bin/env bash
+
+: '
+Migrate a directory from one project to a project in v2.
+
+User must have read access to the source directory, and a valid v2 token with write access to the destination project
+
+Step 1: Get the urls from the source project (identical to the regular gds-migrate)
+Step 2: Create the manifest file and upload to the destination project in v2 (outside the destination directory)
+Step 3: Create output folder in the destination directory and get credentials
+Step 4: Create a migration logs folder in the destination directory and get credentials
+Step 4: Run TES task - populating the following attributes from the task run template
+__GDS_MANIFEST_JSON_URL__
+__AWS_S3_BUCKET__
+__AWS_S3_PATH__
+__AWS_ACCESS_KEY_ID__
+__AWS_SECRET_ACCESS_KEY__
+__AWS_SESSION_TOKEN__
+__AWS_S3_BUCKET_LOGS__
+__AWS_S3_PATH_LOGS__
+__AWS_ACCESS_KEY_ID_LOGS__
+__AWS_SECRET_ACCESS_KEY_LOGS__
+__AWS_SESSION_TOKEN_LOGS__
+__GDS_SYSTEM_FILES_PATH__
+Step 5: If --wait is set, continue and then delete output system files at the end
+'
+
+
+# Set to fail
+set -euo pipefail
+
+# Globals
+TEMPLATE_NAME="gds-migrate-v2-task-run.json"
+
+###########
+# FUNCTIONS
+###########
+
+# Help function
+print_help(){
+  echo "
+        Usage: gds-migrate-v2 (--src-path gds://volume-name/path-to-src-folder/) (--src-project <project-name>)
+                              (--dest-path /icav2/project/path/) (--dest-project v2_project_name)
+                              [--launch-project]
+                              [--rsync-args <rsync-args>]
+                              [--stream]
+
+        Description:
+          Copy data from icav1 project gds path to an ica v2 project.
+          If you are copying most of the data in the src-path then stick to download mode,
+          Otherwise if only a small portion of the data is being transferred, please use the --stream option
+
+        Options:
+            --src-path:          path to gds source directory
+            --src-project:       name of the source project
+            --dest-path:         path to ica v2 project
+            --dest-project:      name of the destination ica v2 project
+            --rsync-args:        comma separated string of rsync args, --archive is included as standard
+            --launch-project:    Use this parameter if you don't have admin permissions to your source project
+            --stream:            Use stream mode for inputs, download is default
+
+        Requirements:
+          * aws
+          * jq     (v1.5+)
+          * python3 (v3.4+)
+
+        Environment:
+          * ICA_BASE_URL
+          * ICAV2_BASE_URL (defaults to ica.illumina.com)
+          * ICAV2_ACCESS_TOKEN
+
+        A token with at least read-only scope must be registered for the source path under ~/.ica-ica-lazy/tokens/tokens.json
+        You must have 'write' access to the icav2 project
+
+        Example:
+          gds-migrate-v2 --src-project production --src-path gds://production/primary_data/2020_FCID/ --dest-project playground_v2 --dest-path /primary_data/2020_FCID/ --rsync-args '--include=*/,--include=*.fastq.gz,--exclude=*'
+        "
+}
+
+###########
+# GET ARGS
+###########
+
+# Get args
+src_gds_path=""
+src_project=""
+dest_path=""
+dest_project=""
+launch_project=""
+rsync_args=""
+rsync_array=""
+input_mode="download"
+template_path="${ICA_ICA_LAZY_HOME-}/templates/${TEMPLATE_NAME}"
+
+# Get args from command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --src-path)
+      src_gds_path="$2"
+      shift 1
+      ;;
+    --src-project)
+      src_project="$2"
+      shift 1
+      ;;
+    --dest-path)
+      dest_path="$2"
+      shift 1
+      ;;
+    --dest-project)
+      dest_project="$2"
+      shift 1
+      ;;
+    --launch-project)
+      launch_project="$2"
+      shift 1
+      ;;
+    --rsync-args)
+      rsync_args="$2"
+      shift 1
+      ;;
+    --stream)
+      input_mode="stream"
+      ;;
+    -h | --help)
+      print_help
+      exit 0
+      ;;
+  esac
+  shift 1
+done
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
+# Ensure gds_path params are set
+if [[ -z "${src_gds_path}" ]]; then
+  echo_stderr "Please make sure --src-path parameter is set"
+  exit 1
+fi
+if [[ -z "${dest_path}" ]]; then
+  echo_stderr "Please make sure --dest-path parameter is set"
+  exit 1
+fi
+
+# Ensure projects are set
+if [[ -z "${src_project}" ]]; then
+  echo_stderr "Please make sure --src-path parameter is set"
+  exit 1
+fi
+if [[ -z "${dest_project}" ]]; then
+  echo_stderr "Please make sure --dest-path parameter is set"
+  exit 1
+fi
+
+# Check dest path is not the root folder
+if [[ "${dest_path}" == "/" ]]; then
+  echo_stderr "Error, cannot set --dest-path as the root directory"
+  exit 1
+fi
+
+# Add trailing slash to destination path
+dest_path="${dest_path%/}/"
+
+# Check the destination path is an absolute path
+if [[ "${dest_path%/}" != "$(python3 -c "from pathlib import Path; print(Path(\"${dest_path}\").absolute())")" ]]; then
+  echo_stderr "--dest-path parameter '${dest_path}' is not an absolute path"
+  exit 1
+fi
+
+# Read through rsync args
+readarray -d',' rsync_array <<< "${rsync_args}"
+
+# Start
+if [[ -z "${ICA_BASE_URL-}" ]]; then
+    echo "Error: Need to set var \"ICA_BASE_URL\"" 1>&2
+    exit 1
+fi
+
+# Set ICAV2 Baseurl if not set
+if [[ -z "${ICAV2_BASE_URL-}" ]]; then
+  icav2_base_url="ica.illumina.com"
+else
+  icav2_base_url="${ICAV2_BASE_URL}"
+fi
+
+# Check ICAV2 Access token is present
+if [[ -z "${ICAV2_ACCESS_TOKEN-}" ]]; then
+  echo_stderr "Error: Please set the environment variable 'ICAV2_ACCESS_TOKEN' before continuing"
+  exit 1
+fi
+dest_project_access_token="${ICAV2_ACCESS_TOKEN}"
+
+# Get source token
+# Check project name in TOKENS PATH
+if [[ -z "$(jq --raw-output --arg project "${src_project}" 'select(.[$project] != null) | .[$project] | keys' <<< cat "$(get_tokens_path "${ICA_ICA_LAZY_HOME}")")" ]]; then
+  echo_stderr "Error: Could not get project '${src_project}' from tokens path"
+  exit 1
+fi
+
+# Get access token
+src_project_access_token="$(get_access_token "${src_project}" "read-only" "$(get_tokens_path "${ICA_ICA_LAZY_HOME}")")"
+# Try admin scope
+if [[ -z "${src_project_access_token}" || "${src_project_access_token}" == "null" ]]; then
+  src_project_access_token="$(get_access_token "${src_project}" "admin" "$(get_tokens_path "${ICA_ICA_LAZY_HOME}")")"
+fi
+
+# Get launch token
+if [[ -n "${launch_project-}" ]]; then
+  launch_project_access_token="$(get_access_token "${launch_project}" "admin" "$(get_tokens_path "${ICA_ICA_LAZY_HOME}")")"
+else
+  launch_project_access_token="$(get_access_token "${src_project}" "admin" "$(get_tokens_path "${ICA_ICA_LAZY_HOME}")")"
+fi
+
+if [[ -z "${launch_project_access_token}" || "${launch_project_access_token}" == "null" ]]; then
+  echo_stderr "Could not get access token to launch the TES task, please use the --launch-project parameter,
+  and specify a project that you have write access to"
+fi
+
+# Get the src stuff volume name / folder path
+src_volume_name="$(get_volume_from_gds_path "${src_gds_path}")"
+src_folder_path="$(get_folder_path_from_gds_path "${src_gds_path}")"
+
+if ! check_path_is_folder "${src_volume_name}" "${src_folder_path}" "${ICA_BASE_URL}" "${src_project_access_token}"; then
+  echo_stderr "Could not confirm ${src_gds_path} was a valid gds path in the ${src_project} context"
+  exit 1
+fi
+
+# Get the dest stuff
+# Get the project id from the project name
+dest_project_id="$(icav2_get_project_id_from_project_name "${dest_project}" "${icav2_base_url}" "${ICAV2_ACCESS_TOKEN}")"
+
+# Check v2 project exists
+if [[ -z "${dest_project_id}" || "${dest_project_id}" == "null" ]]; then
+  echo_stderr "Could not get project id from project name '${dest_project}'"
+  exit 1
+fi
+
+# Create the output folder in v2
+if ! dest_folder_id="$(get_v2_folder_id "${dest_project_id}" "${dest_path}" "${icav2_base_url}" "${dest_project_access_token}")" || [[ -z "${dest_folder_id}" || "${dest_folder_id}" == "null" ]]; then
+  echo_stderr "Creating the folder \"${dest_path}\" on v2 project \"${dest_project}\" (${dest_project_id})"
+  dest_folder_id="$(create_v2_folder "${dest_project_id}" "${dest_path}" "${icav2_base_url}" "${dest_project_access_token}")"
+
+  # Now re-check folder was created successfully
+  if [[ -z "${dest_folder_id}" || "${dest_folder_id}" == "null"  ]]; then
+    echo_stderr "Creation of folder '${dest_path}' in project '${dest_project}' failed"
+    exit 1
+  fi
+fi
+
+# Create the output manifest json file on the v2 project
+
+# Create the output migration logs on the v2 project
+
+# Get file list object as a gds file list in the source
+echo_stderr "Collecting presigned urls from source path"
+file_list_obj="$(get_gds_file_list_as_digestible "${src_volume_name}" "${src_folder_path}" "true" "${ICA_BASE_URL}" "${src_project_access_token}")"
+
+# Reshape json and write out
+temp_manifest_path="$("$(get_mktemp_binary)" -t "manifest.XXX.json")"
+jq --raw-output \
+  '. | select(.file_size != 0) | {url: .presigned_url, size: .file_size, path: .output_path}' <<< "${file_list_obj}" | \
+jq --raw-output --slurp > "${temp_manifest_path}"
+
+dest_migration_folder="$(dirname "${dest_path}")/migration_logs__$(date --utc "+%Y%m%d__%H%M%S")"
+
+# Create a manifest file in this directory
+manifest_json_v2_file_path="${dest_migration_folder}/manifest.$(echo "${RANDOM}" | base64).json"
+
+# Create folder on v2
+dest_migration_folder_id="$(create_v2_folder "${dest_project_id}" "${dest_migration_folder}" "${icav2_base_url}" "${dest_project_access_token}")"
+
+# Create manifest file
+manifest_json_file_id="$(create_v2_file "${dest_project_id}" "${manifest_json_v2_file_path}" "${icav2_base_url}" "${dest_project_access_token}")"
+
+# Get upload presigned url for manifest json file
+manifest_json_file_upload_presigned_url="$(get_v2_file_upload_presigned_url_from_file_id "${dest_project_id}" "${manifest_json_file_id}" "${icav2_base_url}" "${dest_project_access_token}")"
+
+# Use v2_upload_file_to_presigned_url instead
+echo_stderr "Uploading manifest file ${temp_manifest_path} to ${manifest_json_v2_file_path}"
+v2_upload_file_to_presigned_url "${temp_manifest_path}" "${manifest_json_file_upload_presigned_url}"
+
+# Get presigned url
+sleep 3
+iter_counter=0
+while :; do
+  if [[ "${iter_counter}" -gt 5 ]]; then
+    echo_stderr "Could not get manifest presigned url after 30 seconds, exiting"
+    exit
+  fi
+  # Get the manifest presigned url
+  manifest_presigned_url="$(get_v2_file_presigned_url_from_file_id "${dest_project_id}" "${manifest_json_file_id}" "${icav2_base_url}" "${dest_project_access_token}")"
+
+  if [[ -z "${manifest_presigned_url}" || "${manifest_presigned_url}" == "null" ]]; then
+    echo_stderr "Could not get manifest presigned url, sleeping five seconds and then trying again"
+    sleep 5
+    # Increment counter then sleep
+    iter_counter="$((iter_counter + 1))"
+    continue
+  else
+    break
+  fi
+done
+
+echo_stderr "Uploaded manifest file of presigned urls - deleting local tmp copy"
+rm "${temp_manifest_path}"
+
+# Get the json aws creds with the curl PATCH command
+echo_stderr "Getting AWS credentials of output folder"
+dest_aws_credentials="$(get_v2_folder_aws_credentials "${dest_project_id}" "${dest_folder_id}" "${icav2_base_url}" "${dest_project_access_token}")"
+
+# Creds to be exported
+dest_aws_access_key_id="$(get_access_key_id_from_v2_credentials "${dest_aws_credentials}")"
+dest_aws_secret_access_key="$(get_secret_access_key_from_v2_credentials "${dest_aws_credentials}")"
+dest_aws_session_token="$(get_session_token_from_v2_credentials "${dest_aws_credentials}")"
+
+# Migration Components of positional parameter 1
+dest_aws_bucket_name="$(get_bucket_name_from_v2_credentials "${dest_aws_credentials}")"
+dest_aws_key_prefix="$(get_key_prefix_from_v2_credentials "${dest_aws_credentials}")"
+
+echo_stderr "Getting AWS credentials for logs folder"
+dest_migration_aws_credentials="$(get_v2_folder_aws_credentials "${dest_project_id}" "${dest_migration_folder_id}" "${icav2_base_url}" "${dest_project_access_token}")"
+
+# Migration Creds to be exported
+dest_migration_aws_access_key_id="$(get_access_key_id_from_v2_credentials "${dest_migration_aws_credentials}")"
+dest_migration_aws_secret_access_key="$(get_secret_access_key_from_v2_credentials "${dest_migration_aws_credentials}")"
+dest_migration_aws_session_token="$(get_session_token_from_v2_credentials "${dest_migration_aws_credentials}")"
+
+# Migration Components of positional parameter 1
+dest_migration_aws_bucket_name="$(get_bucket_name_from_v2_credentials "${dest_migration_aws_credentials}")"
+dest_migration_aws_key_prefix="$(get_key_prefix_from_v2_credentials "${dest_migration_aws_credentials}")"
+
+# Create temp file with template
+temp_tes_migration_path="$("$(get_mktemp_binary)" -t "tes-migrate.XXX.json")"
+cp "${template_path}" "${temp_tes_migration_path}"
+
+# Update template TES json
+echo_stderr "Populating TES task template"
+"$(get_sed_binary)" -i "s#__GDS_MANIFEST_JSON_URL__#${manifest_presigned_url//&/\\&}#" "${temp_tes_migration_path}"
+
+# Regular aws token
+"$(get_sed_binary)" -i "s%__AWS_S3_BUCKET__%${dest_aws_bucket_name}%" "${temp_tes_migration_path}"
+"$(get_sed_binary)" -i "s%__AWS_S3_PATH__%${dest_aws_key_prefix}%" "${temp_tes_migration_path}"
+"$(get_sed_binary)" -i "s%__AWS_ACCESS_KEY_ID__%${dest_aws_access_key_id}%" "${temp_tes_migration_path}"
+"$(get_sed_binary)" -i "s%__AWS_SECRET_ACCESS_KEY__%${dest_aws_secret_access_key}%" "${temp_tes_migration_path}"
+"$(get_sed_binary)" -i "s%__AWS_SESSION_TOKEN__%${dest_aws_session_token}%" "${temp_tes_migration_path}"
+
+# Adjacent directory with migration logs
+"$(get_sed_binary)" -i "s%__AWS_S3_BUCKET_LOGS__%${dest_migration_aws_bucket_name}%" "${temp_tes_migration_path}"
+"$(get_sed_binary)" -i "s%__AWS_S3_PATH_LOGS__%${dest_migration_aws_key_prefix}%" "${temp_tes_migration_path}"
+"$(get_sed_binary)" -i "s%__AWS_ACCESS_KEY_ID_LOGS__%${dest_migration_aws_access_key_id}%" "${temp_tes_migration_path}"
+"$(get_sed_binary)" -i "s%__AWS_SECRET_ACCESS_KEY_LOGS__%${dest_migration_aws_secret_access_key}%" "${temp_tes_migration_path}"
+"$(get_sed_binary)" -i "s%__AWS_SESSION_TOKEN_LOGS__%${dest_migration_aws_session_token}%" "${temp_tes_migration_path}"
+
+
+# Add in rsync args
+rsync_str="\"--archive\", "
+for rsync_arg in "${rsync_array[@]}"; do
+  rsync_arg="${rsync_arg%,}"
+  rsync_arg="${rsync_arg%$'\n'}"
+  if [[ -n "${rsync_arg}" ]]; then
+    rsync_str+="\"${rsync_arg%,}\", "
+  fi
+done
+"$(get_sed_binary)" -i "s%__ADDITIONAL_RSYNC_ARGS__%${rsync_str}%" "${temp_tes_migration_path}"
+
+# Determine if stream or download
+"$(get_sed_binary)" -i "s%__STREAM_OR_DOWNLOAD__%${input_mode}%" "${temp_tes_migration_path}"
+
+# Launch the tes task
+echo_stderr "Launching TES task"
+tes_task_id="$(curl \
+    --silent \
+    --fail \
+    --location \
+    --request POST \
+    --header 'Accept: application/json' \
+    --header 'Content-Type: application/*+json' \
+    --header "Authorization: Bearer ${launch_project_access_token}" \
+    --data "@${temp_tes_migration_path}" \
+    --url "${ICA_BASE_URL}/v1/tasks/runs" |
+    jq --raw-output '.id')"
+
+echo_stderr "Launching data transfer with task run ${tes_task_id}"
+echo_stderr "Once the migration task is complete you may remove the log directory \"${dest_migration_folder}\" from the \"${dest_project}\""
+
+
