@@ -2,10 +2,10 @@
 
 # Generated with perl module App::Spec v0.013
 
-_gds-migrate() {
+_gds-migrate-v2() {
 
     COMPREPLY=()
-    local program=gds-migrate
+    local program=gds-migrate-v2
     local cur prev words cword
     _init_completion -n : || return
     declare -a FLAGS
@@ -23,20 +23,20 @@ _gds-migrate() {
 ' '--rsync-args' 'Comma separated list of rsync args
 ' '--stream' 'Stream inputs rather than download into container
 ')
-    __gds-migrate_handle_options_flags
+    __gds-migrate-v2_handle_options_flags
 
     case ${MYWORDS[$INDEX-1]} in
       --src-path)
-        _gds-migrate__option_src_path_completion
+        _gds-migrate-v2__option_src_path_completion
       ;;
       --src-project)
-        _gds-migrate__option_src_project_completion
+        _gds-migrate-v2__option_src_project_completion
       ;;
       --dest-path)
-        _gds-migrate__option_dest_path_completion
+        _gds-migrate-v2__option_dest_path_completion
       ;;
       --dest-project)
-        _gds-migrate__option_dest_project_completion
+        _gds-migrate-v2__option_dest_project_completion
       ;;
       --rsync-args)
       ;;
@@ -53,7 +53,7 @@ _gds-migrate() {
 
 }
 
-_gds-migrate_compreply() {
+_gds-migrate-v2_compreply() {
     local prefix=""
     cur="$(printf '%q' "$cur")"
     IFS=$'\n' COMPREPLY=($(compgen -P "$prefix" -W "$*" -- "$cur"))
@@ -66,28 +66,28 @@ _gds-migrate_compreply() {
     fi
 }
 
-_gds-migrate__option_src_path_completion() {
+_gds-migrate-v2__option_src_path_completion() {
     local CURRENT_WORD="${words[$cword]}"
     local param_src_path="$(gds-ls "${CURRENT_WORD}")"
-    _gds-migrate_compreply "$param_src_path"
+    _gds-migrate-v2_compreply "$param_src_path"
 }
-_gds-migrate__option_src_project_completion() {
+_gds-migrate-v2__option_src_project_completion() {
     local CURRENT_WORD="${words[$cword]}"
     local param_src_project="$(cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]')"
-    _gds-migrate_compreply "$param_src_project"
+    _gds-migrate-v2_compreply "$param_src_project"
 }
-_gds-migrate__option_dest_path_completion() {
+_gds-migrate-v2__option_dest_path_completion() {
     local CURRENT_WORD="${words[$cword]}"
     local param_dest_path="$(gds-ls "${CURRENT_WORD}")"
-    _gds-migrate_compreply "$param_dest_path"
+    _gds-migrate-v2_compreply "$param_dest_path"
 }
-_gds-migrate__option_dest_project_completion() {
+_gds-migrate-v2__option_dest_project_completion() {
     local CURRENT_WORD="${words[$cword]}"
     local param_dest_project="$(cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]')"
-    _gds-migrate_compreply "$param_dest_project"
+    _gds-migrate-v2_compreply "$param_dest_project"
 }
 
-__gds-migrate_dynamic_comp() {
+__gds-migrate-v2_dynamic_comp() {
     local argname="$1"
     local arg="$2"
     local name desc cols desclength formatted
@@ -119,10 +119,10 @@ __gds-migrate_dynamic_comp() {
             comp+=("'$name'")
         fi
     done <<< "$arg"
-    _gds-migrate_compreply ${comp[@]}
+    _gds-migrate-v2_compreply ${comp[@]}
 }
 
-function __gds-migrate_handle_options() {
+function __gds-migrate-v2_handle_options() {
     local i j
     declare -a copy
     local last="${MYWORDS[$INDEX]}"
@@ -149,7 +149,7 @@ function __gds-migrate_handle_options() {
     MYWORDS=("${copy[@]}" "$last")
 }
 
-function __gds-migrate_handle_flags() {
+function __gds-migrate-v2_handle_flags() {
     local i j
     declare -a copy
     local last="${MYWORDS[$INDEX]}"
@@ -175,9 +175,9 @@ function __gds-migrate_handle_flags() {
     MYWORDS=("${copy[@]}" "$last")
 }
 
-__gds-migrate_handle_options_flags() {
-    __gds-migrate_handle_options
-    __gds-migrate_handle_flags
+__gds-migrate-v2_handle_options_flags() {
+    __gds-migrate-v2_handle_options
+    __gds-migrate-v2_handle_flags
 }
 
 __comp_current_options() {
@@ -200,7 +200,7 @@ __comp_current_options() {
           local desc="${OPTIONS[$j+1]}"
           options_spec+="$name"$'\t'"$desc"$'\n'
       done
-      __gds-migrate_dynamic_comp 'options' "$options_spec"
+      __gds-migrate-v2_dynamic_comp 'options' "$options_spec"
 
       return 1
     else
@@ -209,5 +209,5 @@ __comp_current_options() {
 }
 
 
-complete -o default -F _gds-migrate gds-migrate
+complete -o default -F _gds-migrate-v2 gds-migrate-v2
 

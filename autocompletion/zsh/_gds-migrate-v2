@@ -1,9 +1,9 @@
-#compdef gds-migrate
+#compdef gds-migrate-v2
 
 # Generated with perl module App::Spec v0.013
 
-_gds-migrate() {
-    local program=gds-migrate
+_gds-migrate-v2() {
+    local program=gds-migrate-v2
     typeset -A opt_args
     local curcontext="$curcontext" state line context
 
@@ -11,13 +11,13 @@ _gds-migrate() {
         # ---- Command: 
         _arguments -s  \
             '--src-path[The source gds folder path
-]:src-path:_gds-migrate__option_src_path_completion' \
+]:src-path:_gds-migrate-v2__option_src_path_completion' \
             '--src-project[The source gds project
-]:src-project:_gds-migrate__option_src_project_completion' \
+]:src-project:_gds-migrate-v2__option_src_project_completion' \
             '--dest-path[The destination gds folder path
-]:dest-path:_gds-migrate__option_dest_path_completion' \
+]:dest-path:_gds-migrate-v2__option_dest_path_completion' \
             '--dest-project[The destination gds project
-]:dest-project:_gds-migrate__option_dest_project_completion' \
+]:dest-project:_gds-migrate-v2__option_dest_project_completion' \
             '--rsync-args[Comma separated list of rsync args
 ]:rsync-args' \
             '--stream[Stream inputs rather than download into container
@@ -30,32 +30,32 @@ _gds-migrate() {
 
 }
 
-_gds-migrate__option_src_path_completion() {
+_gds-migrate-v2__option_src_path_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
     IFS=$'\n' __dynamic_completion=( $( gds-ls "${CURRENT_WORD}" ) )
     compadd -X "src_path:" $__dynamic_completion
 }
-_gds-migrate__option_src_project_completion() {
+_gds-migrate-v2__option_src_project_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
     IFS=$'\n' __dynamic_completion=( $( cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]' ) )
     compadd -X "src_project:" $__dynamic_completion
 }
-_gds-migrate__option_dest_path_completion() {
+_gds-migrate-v2__option_dest_path_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
     IFS=$'\n' __dynamic_completion=( $( gds-ls "${CURRENT_WORD}" ) )
     compadd -X "dest_path:" $__dynamic_completion
 }
-_gds-migrate__option_dest_project_completion() {
+_gds-migrate-v2__option_dest_project_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
     IFS=$'\n' __dynamic_completion=( $( cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]' ) )
     compadd -X "dest_project:" $__dynamic_completion
 }
 
-__gds-migrate_dynamic_comp() {
+__gds-migrate-v2_dynamic_comp() {
     local argname="$1"
     local arg="$2"
     local comp="arg:$argname:(("
