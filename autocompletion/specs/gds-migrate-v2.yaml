@@ -1,7 +1,7 @@
 ---
-name: gds-migrate
+name: gds-migrate-v2
 
-title: Copy directory from one project to another
+title: Copy directory from one project to a project on v2
 
 options:
   - name: src-path
