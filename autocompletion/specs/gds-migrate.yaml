@@ -4,17 +4,36 @@ name: gds-migrate
 title: Copy directory from one project to another
 
 options:
+  - name: src-project
+    type: string
+    summary: |
+      The source gds project
+    completion:
+      command_string: |-
+        cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]'
   - name: src-path
     type: string
     summary: |
       The source gds folder path
     completion:
       command_string: |-
-        gds-ls "${CURRENT_WORD}"
-  - name: src-project
+        project_index="-1";
+        for i in "${!words[@]}"; do
+           if [[ "${words[$i]}" == "--src-project" ]]; then
+               project_index="$(expr $i + 1)";
+           fi;
+        done;
+        if [[ "${project_index}" == "-1" ]]; then
+          gds-ls "${CURRENT_WORD}";
+        else
+          project_name="${words[$project_index]}";
+          ica_access_token="$(jq --raw-output --arg project_name "${project_name}" '.[$project_name] | to_entries[0] | .value' "$HOME/.ica-ica-lazy/tokens/tokens.json")";
+          ICA_ACCESS_TOKEN="${ica_access_token}" gds-ls "${CURRENT_WORD}";
+        fi
+  - name: dest-project
     type: string
     summary: |
-      The source gds project
+      The destination gds project
     completion:
       command_string: |-
         cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]'
@@ -24,14 +43,19 @@ options:
       The destination gds folder path
     completion:
       command_string: |-
-        gds-ls "${CURRENT_WORD}"
-  - name: dest-project
-    type: string
-    summary: |
-      The destination gds project
-    completion:
-      command_string: |-
-        cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]'
+        project_index="-1";
+        for i in "${!words[@]}"; do
+           if [[ "${words[$i]}" == "--dest-project" ]]; then
+               project_index="$(expr $i + 1)";
+           fi;
+        done;
+        if [[ "${project_index}" == "-1" ]]; then
+          gds-ls "${CURRENT_WORD}";
+        else
+          project_name="${words[$project_index]}";
+          ica_access_token="$(jq --raw-output --arg project_name "${project_name}" '.[$project_name] | to_entries[0] | .value' "$HOME/.ica-ica-lazy/tokens/tokens.json")";
+          ICA_ACCESS_TOKEN="${ica_access_token}" gds-ls "${CURRENT_WORD}";
+        fi
   - name: rsync-args
     type: string
     summary: |
