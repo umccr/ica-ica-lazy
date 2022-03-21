@@ -10,14 +10,14 @@ _gds-migrate-v2() {
 
         # ---- Command: 
         _arguments -s  \
-            '--src-path[The source gds folder path
-]:src-path:_gds-migrate-v2__option_src_path_completion' \
             '--src-project[The source gds project
 ]:src-project:_gds-migrate-v2__option_src_project_completion' \
-            '--dest-path[The destination gds folder path
-]:dest-path:_gds-migrate-v2__option_dest_path_completion' \
+            '--src-path[The source gds folder path
+]:src-path:_gds-migrate-v2__option_src_path_completion' \
             '--dest-project[The destination gds project
 ]:dest-project:_gds-migrate-v2__option_dest_project_completion' \
+            '--dest-path[The destination folder path for the v2 directory
+]:dest-path:_gds-migrate-v2__option_dest_path_completion' \
             '--rsync-args[Comma separated list of rsync args
 ]:rsync-args' \
             '--stream[Stream inputs rather than download into container
@@ -30,29 +30,77 @@ _gds-migrate-v2() {
 
 }
 
-_gds-migrate-v2__option_src_path_completion() {
-    local __dynamic_completion
-    local CURRENT_WORD="$words[CURRENT]"
-    IFS=$'\n' __dynamic_completion=( $( gds-ls "${CURRENT_WORD}" ) )
-    compadd -X "src_path:" $__dynamic_completion
-}
 _gds-migrate-v2__option_src_project_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
     IFS=$'\n' __dynamic_completion=( $( cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]' ) )
     compadd -X "src_project:" $__dynamic_completion
 }
-_gds-migrate-v2__option_dest_path_completion() {
+_gds-migrate-v2__option_src_path_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
-    IFS=$'\n' __dynamic_completion=( $( gds-ls "${CURRENT_WORD}" ) )
-    compadd -X "dest_path:" $__dynamic_completion
+    IFS=$'\n' __dynamic_completion=( $( project_index="-1";
+for i in "${!words[@]}"; do
+   if [[ "${words[$i]}" == "--src-project" ]]; then
+       project_index="$(expr $i + 1)";
+   fi;
+done;
+if [[ "${project_index}" == "-1" ]]; then
+  gds-ls "${CURRENT_WORD}";
+else
+  project_name="${words[$project_index]}";
+  ica_access_token="$(jq --raw-output --arg project_name "${project_name}" '.[$project_name] | to_entries[0] | .value' "$HOME/.ica-ica-lazy/tokens/tokens.json")";
+  ICA_ACCESS_TOKEN="${ica_access_token}" gds-ls "${CURRENT_WORD}";
+fi ) )
+    compadd -X "src_path:" $__dynamic_completion
 }
 _gds-migrate-v2__option_dest_project_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
-    IFS=$'\n' __dynamic_completion=( $( cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]' ) )
+    IFS=$'\n' __dynamic_completion=( $( if [[ -n "${ICAV2_ACCESS_TOKEN-}" ]]; then
+  curl --silent --fail --location --request "GET" \
+       --url "https://${ICAV2_BASE_URL-ica.illumina.com}/ica/rest/api/projects" \
+       --header 'Accept: application/vnd.illumina.v3+json' \
+       --header "Authorization: Bearer ${ICAV2_ACCESS_TOKEN}" | \
+  jq '.items[] | .name'
+fi ) )
     compadd -X "dest_project:" $__dynamic_completion
+}
+_gds-migrate-v2__option_dest_path_completion() {
+    local __dynamic_completion
+    local CURRENT_WORD="$words[CURRENT]"
+    IFS=$'\n' __dynamic_completion=( $( if [[ -n "${ICAV2_ACCESS_TOKEN-}" ]]; then
+  project_index="-1";
+  for i in "${!words[@]}"; do
+     if [[ "${words[$i]}" == "--dest-project" ]]; then
+         project_index="$(expr $i + 1)";
+     fi;
+  done;
+  if [[ ! "${project_index}" == "-1" ]]; then
+    project_name="${words[$project_index]}";
+    project_id="$(curl --silent --fail --location \
+                    --request "GET" \
+                    --url "https://${ICAV2_BASE_URL-ica.illumina.com}/ica/rest/api/projects" \
+                    --header "Accept: application/vnd.illumina.v3+json" \
+                    --header "Authorization: Bearer ${ICAV2_ACCESS_TOKEN}" | \
+                  jq --raw-output \
+                    --arg "project_name" "${project_name}" \
+                    '.items[] | select(.name==$project_name) | .id')";
+    if [[ "${CURRENT_WORD}" == */ ]]; then
+      parent_folder="${CURRENT_WORD}";
+    else
+      parent_folder="$(dirname "${CURRENT_WORD}")";
+    fi;
+    curl --silent --fail --location \
+      --request "GET" \
+      --header "Accept: application/vnd.illumina.v3+json" \
+      --header "Authorization: Bearer ${ICAV2_ACCESS_TOKEN}" \
+      --url "https://${ICAV2_BASE_URL-ica.illumina.com}/ica/rest/api/projects/${project_id}/data?parentFolderPath=${parent_folder%/}/&filenameMatchMode=EXACT&type=FOLDER" | 
+    jq --raw-output \
+      '.items[] | .data.details.path';
+  fi;
+fi ) )
+    compadd -X "dest_path:" $__dynamic_completion
 }
 
 __gds-migrate-v2_dynamic_comp() {

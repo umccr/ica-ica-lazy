@@ -16,27 +16,27 @@ _gds-migrate() {
     MYWORDS=("${words[@]:1:$cword}")
 
     FLAGS=('--help' 'Show command help' '-h' 'Show command help')
-    OPTIONS=('--src-path' 'The source gds folder path
-' '--src-project' 'The source gds project
-' '--dest-path' 'The destination gds folder path
+    OPTIONS=('--src-project' 'The source gds project
+' '--src-path' 'The source gds folder path
 ' '--dest-project' 'The destination gds project
+' '--dest-path' 'The destination gds folder path
 ' '--rsync-args' 'Comma separated list of rsync args
 ' '--stream' 'Stream inputs rather than download into container
 ')
     __gds-migrate_handle_options_flags
 
     case ${MYWORDS[$INDEX-1]} in
-      --src-path)
-        _gds-migrate__option_src_path_completion
-      ;;
       --src-project)
         _gds-migrate__option_src_project_completion
       ;;
-      --dest-path)
-        _gds-migrate__option_dest_path_completion
+      --src-path)
+        _gds-migrate__option_src_path_completion
       ;;
       --dest-project)
         _gds-migrate__option_dest_project_completion
+      ;;
+      --dest-path)
+        _gds-migrate__option_dest_path_completion
       ;;
       --rsync-args)
       ;;
@@ -66,25 +66,49 @@ _gds-migrate_compreply() {
     fi
 }
 
-_gds-migrate__option_src_path_completion() {
-    local CURRENT_WORD="${words[$cword]}"
-    local param_src_path="$(gds-ls "${CURRENT_WORD}")"
-    _gds-migrate_compreply "$param_src_path"
-}
 _gds-migrate__option_src_project_completion() {
     local CURRENT_WORD="${words[$cword]}"
     local param_src_project="$(cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]')"
     _gds-migrate_compreply "$param_src_project"
 }
-_gds-migrate__option_dest_path_completion() {
+_gds-migrate__option_src_path_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_dest_path="$(gds-ls "${CURRENT_WORD}")"
-    _gds-migrate_compreply "$param_dest_path"
+    local param_src_path="$(project_index="-1";
+for i in "${!words[@]}"; do
+   if [[ "${words[$i]}" == "--src-project" ]]; then
+       project_index="$(expr $i + 1)";
+   fi;
+done;
+if [[ "${project_index}" == "-1" ]]; then
+  gds-ls "${CURRENT_WORD}";
+else
+  project_name="${words[$project_index]}";
+  ica_access_token="$(jq --raw-output --arg project_name "${project_name}" '.[$project_name] | to_entries[0] | .value' "$HOME/.ica-ica-lazy/tokens/tokens.json")";
+  ICA_ACCESS_TOKEN="${ica_access_token}" gds-ls "${CURRENT_WORD}";
+fi)"
+    _gds-migrate_compreply "$param_src_path"
 }
 _gds-migrate__option_dest_project_completion() {
     local CURRENT_WORD="${words[$cword]}"
     local param_dest_project="$(cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]')"
     _gds-migrate_compreply "$param_dest_project"
+}
+_gds-migrate__option_dest_path_completion() {
+    local CURRENT_WORD="${words[$cword]}"
+    local param_dest_path="$(project_index="-1";
+for i in "${!words[@]}"; do
+   if [[ "${words[$i]}" == "--dest-project" ]]; then
+       project_index="$(expr $i + 1)";
+   fi;
+done;
+if [[ "${project_index}" == "-1" ]]; then
+  gds-ls "${CURRENT_WORD}";
+else
+  project_name="${words[$project_index]}";
+  ica_access_token="$(jq --raw-output --arg project_name "${project_name}" '.[$project_name] | to_entries[0] | .value' "$HOME/.ica-ica-lazy/tokens/tokens.json")";
+  ICA_ACCESS_TOKEN="${ica_access_token}" gds-ls "${CURRENT_WORD}";
+fi)"
+    _gds-migrate_compreply "$param_dest_path"
 }
 
 __gds-migrate_dynamic_comp() {
