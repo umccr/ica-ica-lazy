@@ -148,12 +148,6 @@ if [[ -z "${dest_project}" ]]; then
   exit 1
 fi
 
-# Make sure src and dest projects aren't the same
-if [[ "${src_project}" == "${dest_project}" ]]; then
-  echo_stderr "Please make sure --src-project and --dest-project parameter values are different"
-  exit 1
-fi
-
 # Read through rsync args
 readarray -d',' rsync_array <<< "${rsync_args}"
 

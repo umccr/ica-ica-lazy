@@ -11,6 +11,7 @@ set -euo pipefail
 #########
 DEFAULT_PORT="3000"
 DEFAULT_SCOPE="read-only"
+DEFAULT_CONTAINER="ghcr.io/umccr/illumination:1.0.1"
 
 print_help(){
   echo "
@@ -56,7 +57,7 @@ run_illumination_docker(){
     --env "ICA_ACCESS_TOKEN=${ica_access_token}" \
     --env "PORT=${port}" \
     --publish "${port}:${port}" \
-    "quay.io/umccr/illumination:latest"
+    "${DEFAULT_CONTAINER}"
 }
 
 # Inputs
