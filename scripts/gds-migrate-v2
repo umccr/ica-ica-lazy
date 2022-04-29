@@ -275,7 +275,7 @@ jq --raw-output \
   '. | select(.file_size != 0) | {url: .presigned_url, size: .file_size, path: .output_path}' <<< "${file_list_obj}" | \
 jq --raw-output --slurp > "${temp_manifest_path}"
 
-dest_migration_folder="$(dirname "${dest_path}")/migration_logs__$(date --utc "+%Y%m%d__%H%M%S")"
+dest_migration_folder="$(dirname "${dest_path}")/migration_logs__$("$(get_date_binary)" --utc "+%Y%m%d__%H%M%S")"
 
 # Create a manifest file in this directory
 manifest_json_v2_file_path="${dest_migration_folder}/manifest.$(echo "${RANDOM}" | base64).json"
