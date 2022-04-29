@@ -16,6 +16,14 @@ get_base64_binary(){
   fi
 }
 
+get_date_binary(){
+  if [[ "${OSTYPE}" == "darwin"* ]]; then
+    echo "gdate"
+  else
+    echo "date"
+  fi
+}
+
 get_mktemp_binary(){
   if [[ "${OSTYPE}" == "darwin"* ]]; then
     echo "gmktemp"
