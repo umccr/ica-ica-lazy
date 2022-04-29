@@ -27,7 +27,7 @@ get_seconds_to_expiry(){
   Get seconds to expiry based on epoch time
   '
   local expiry_epoch="$1"
-  bc <<< "${expiry_epoch} - $(date +%s)"
+  bc <<< "${expiry_epoch} - $("$(get_date_binary)" +%s)"
 }
 
 warn_time_to_expiry(){
