@@ -150,7 +150,8 @@ _gds-migrate-v2__option_dest_path_completion() {
       --url "https://${ICAV2_BASE_URL-ica.illumina.com}/ica/rest/api/projects/${project_id}/data?parentFolderPath=${parent_folder%/}/&filenameMatchMode=EXACT&type=FOLDER" | 
     jq --raw-output \
       '.items[] | .data.details.path';
-  fi)"
+  fi
+fi)"
     _gds-migrate-v2_compreply "$param_dest_path"
 }
 
