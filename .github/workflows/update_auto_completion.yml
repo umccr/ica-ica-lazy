@@ -25,7 +25,7 @@ jobs:
       - id: update_autocompletion
         name: update autocompletion
         run: |
-          docker pull quay.io/alexiswl4/appspec:0.006
+          docker pull ghcr.io/umccr/appspec:0.006
           docker run \
              --rm \
              --user "$(id -u):$(id -g)" \
