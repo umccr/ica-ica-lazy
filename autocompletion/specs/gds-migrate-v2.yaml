@@ -99,6 +99,7 @@ options:
               jq --raw-output \
                 '.items[] | .data.details.path';
             fi
+          fi
   - name: rsync-args
     type: string
     summary: |
