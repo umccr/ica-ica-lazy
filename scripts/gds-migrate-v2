@@ -382,7 +382,7 @@ done
 
 # Launch the tes task
 echo_stderr "Launching TES task"
-tes_task_id="$(curl \
+if ! tes_task_id="$(curl \
     --silent \
     --fail \
     --location \
@@ -392,7 +392,9 @@ tes_task_id="$(curl \
     --header "Authorization: Bearer ${launch_project_access_token}" \
     --data "@${temp_tes_migration_path}" \
     --url "${ICA_BASE_URL}/v1/tasks/runs" |
-    jq --raw-output '.id')"
+    jq --raw-output '.id')"; then
+    echo_stderr "TES Task launch failed" 1>&2
+fi
 
 echo_stderr "Launching data transfer with task run ${tes_task_id}"
 echo_stderr "Once the migration task is complete you may remove the log directory \"${dest_migration_folder}\" from the \"${dest_project}\""
