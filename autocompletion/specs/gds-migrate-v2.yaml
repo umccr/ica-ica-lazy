@@ -17,21 +17,29 @@ options:
       The source gds folder path
     completion:
       command_string: |-
-        bash << EOF
-          project_index="-1";
+        project_index="-1";
+        project_name="";
+        if [[ "$(basename "${SHELL}")" == "bash" ]]; then
           for i in "${!words[@]}"; do
              if [[ "${words[$i]}" == "--src-project" ]]; then
                  project_index="$(expr $i + 1)";
              fi;
           done;
-          if [[ "${project_index}" == "-1" ]]; then
-            gds-ls "${CURRENT_WORD}";
-          else
-            project_name="${words[$project_index]}";
-            ica_access_token="$(jq --raw-output --arg project_name "${project_name}" '.[$project_name] | to_entries[0] | .value' "$HOME/.ica-ica-lazy/tokens/tokens.json")";
-            ICA_ACCESS_TOKEN="${ica_access_token}" gds-ls "${CURRENT_WORD}";
-          fi
-        EOF
+          project_name="${words[$project_index]}";
+        elif [[ "$(basename "${SHELL}")" == "zsh" ]]; then
+          for ((i = 1; i <= $#words; i++)); do
+             if [[ "${words[$i]}" == "--src-project" ]]; then
+                 project_index="$(expr $i + 1)";
+             fi;
+          done;
+          project_name="${words[$project_index]}";
+        fi;
+        if [[ -z "${project_name}" ]]; then
+          gds-ls "${CURRENT_WORD}";
+        else
+          ica_access_token="$(jq --raw-output --arg project_name "${project_name}" '.[$project_name] | to_entries[0] | .value' "$HOME/.ica-ica-lazy/tokens/tokens.json")";
+          ICA_ACCESS_TOKEN="${ica_access_token}" gds-ls "${CURRENT_WORD}";
+        fi
   - name: dest-project
     type: string
     summary: |
@@ -51,16 +59,25 @@ options:
       The destination folder path for the v2 directory
     completion:
       command_string: |-
-        bash << EOF
           if [[ -n "${ICAV2_ACCESS_TOKEN-}" ]]; then
-            project_index="-1";
-            for i in "${!words[@]}"; do
-               if [[ "${words[$i]}" == "--dest-project" ]]; then
-                   project_index="$(expr $i + 1)";
-               fi;
-            done;
-            if [[ ! "${project_index}" == "-1" ]]; then
-              project_name="${words[$project_index]}";
+              project_index="-1";
+              project_name="";
+              if [[ "$(basename "${SHELL}")" == "bash" ]]; then
+                  for i in "${!words[@]}"; do
+                     if [[ "${words[$i]}" == "--dest-project" ]]; then
+                         project_index="$(expr $i + 1)";
+                         project_name="${words[$project_index]}";
+                     fi;
+                  done;
+              elif [[ "$(basename "${SHELL}")" == "zsh" ]]; then
+                  for ((i = 1; i <= $#words; i++)); do
+                     if [[ "${words[$i]}" == "--dest-project" ]]; then
+                         project_index="$(expr $i + 1)";
+                         project_name="${words[$project_index]}";
+                     fi;
+                  done;
+              fi;
+            if [[ -n "${project_name}" ]]; then
               project_id="$(curl --silent --fail --location \
                               --request "GET" \
                               --url "https://${ICAV2_BASE_URL-ica.illumina.com}/ica/rest/api/projects" \
@@ -81,9 +98,7 @@ options:
                 --url "https://${ICAV2_BASE_URL-ica.illumina.com}/ica/rest/api/projects/${project_id}/data?parentFolderPath=${parent_folder%/}/&filenameMatchMode=EXACT&type=FOLDER" | 
               jq --raw-output \
                 '.items[] | .data.details.path';
-            fi;
-          fi
-        EOF
+            fi
   - name: rsync-args
     type: string
     summary: |
