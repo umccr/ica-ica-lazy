@@ -154,8 +154,6 @@ get_scope_string(){
     echo "${READ_ONLY_SCOPE_STRING}"
   elif [[ "${scope_level}" == "admin" ]]; then
     echo "${ADMIN_SCOPE_STRING}"
-  elif [[ "${scope_level}" == "contributor" ]]; then
-    echo "${CONTRIBUTOR_SCOPE_STRING}"
   fi
 }
 
