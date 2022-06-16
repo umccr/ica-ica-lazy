@@ -155,10 +155,39 @@ ica-context-switcher(){
     return 1
   fi
 
+  # Poor man's token expiry
+  token_expiry="$( \
+    {
+      # Print token to /dev/stdin
+      echo "${ica_access_token}"
+    } | {
+      # Collect second attribute
+      cut -d'.' -f2
+    } | {
+      # Need to wrap this bit in a || true statement
+      # Since Illumina tokens aren't padded
+      (
+        base64 --decode 2>/dev/null || \
+        true
+      )
+    } | {
+      jq --raw-output '.exp'
+    } \
+  )"
+
+  # Current time
+  current_epoch_time="$(date "+%s")"
+
+  if [[ "${token_expiry}" -le "${current_epoch_time}" ]]; then
+    _echo_stderr "Token found but has expired, please run 'ica-add-access-token --scope \"${scope}\" --project-name \"${project_name}\"' and then rerun this command"
+    return 1
+  fi
+
   # Export the access token
   ICA_ACCESS_TOKEN="${ica_access_token}"
   export ICA_ACCESS_TOKEN
 
+  # Let user know run was successful
   _echo_stderr "Successfully switched to ICA project \"${project_name}\" with scope level \"${scope}\""
 }
 
