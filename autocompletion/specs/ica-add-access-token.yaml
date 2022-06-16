@@ -14,4 +14,4 @@ options:
     summary: |
       The privilege level you'd like to associate with the token
     type: string
-    enum: [ read-only, contributor, admin ]
+    enum: [ read-only, admin ]

@@ -3,7 +3,7 @@
 : '
 Migrate a directory from one project to another.
 
-User must have read access to the source directory, and contributor access to the destination project
+User must have read access to the source directory, and write access to the destination project
 
 Step 1: Get the urls from the destination project (similar to gds-create-download-script)
 Step 2: Create the manifest file and upload to the development project (outside the destination directory)
@@ -57,7 +57,7 @@ print_help(){
           * ICA_BASE_URL
 
         A token with at least read-only scope must be registered for the source path.
-        A taken with at least contributor scope must be registered for the destination path
+        A taken with at least admin scope must be registered for the destination path
 
         Example:
           gds-migrate --src-project production --src-path gds://production/primary_data/2020_FCID/ --dest-project development --dest-path gds://development/primary_data/2021_FCID/ --rsync-args '--include=*/,--include=*.fastq.gz,--exclude=*'
