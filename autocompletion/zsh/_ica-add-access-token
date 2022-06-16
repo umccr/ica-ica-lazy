@@ -13,7 +13,7 @@ _ica-add-access-token() {
             '--project-name[Name of the project
 ]:project-name' \
             '--scope[The privilege level you'"'"'d like to associate with the token
-]:scope:("read-only" "contributor" "admin")' \
+]:scope:("read-only" "admin")' \
             '--help[Show command help]' \
             '-h[Show command help]' \
             && ret=0
