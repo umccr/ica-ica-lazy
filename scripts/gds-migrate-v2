@@ -228,6 +228,7 @@ fi
 if [[ -z "${launch_project_access_token}" || "${launch_project_access_token}" == "null" ]]; then
   echo_stderr "Could not get access token to launch the TES task, please use the --launch-project parameter,
   and specify a project that you have write access to"
+  exit 1
 fi
 
 # Get the src stuff volume name / folder path
@@ -235,7 +236,7 @@ src_volume_name="$(get_volume_from_gds_path "${src_gds_path}")"
 src_folder_path="$(get_folder_path_from_gds_path "${src_gds_path}")"
 
 if ! check_path_is_folder "${src_volume_name}" "${src_folder_path}" "${ICA_BASE_URL}" "${src_project_access_token}"; then
-  echo_stderr "Could not confirm ${src_gds_path} was a valid gds path in the ${src_project} context"
+  echo_stderr "Could not confirm ${src_gds_path} was a valid gds folder path in the ${src_project} context"
   exit 1
 fi
 
@@ -299,7 +300,7 @@ iter_counter=0
 while :; do
   if [[ "${iter_counter}" -gt 5 ]]; then
     echo_stderr "Could not get manifest presigned url after 30 seconds, exiting"
-    exit
+    exit 1
   fi
   # Get the manifest presigned url
   manifest_presigned_url="$(get_v2_file_presigned_url_from_file_id "${dest_project_id}" "${manifest_json_file_id}" "${icav2_base_url}" "${dest_project_access_token}")"
