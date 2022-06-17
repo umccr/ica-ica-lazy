@@ -29,6 +29,14 @@ ica-context-switcher(){
     echo "$@" 1>&2
   }
 
+  _get_base64_binary(){
+    if [[ "${OSTYPE}" == "darwin"* ]]; then
+      echo "gbase64"
+    else
+      echo "base64"
+    fi
+  }
+
   _check_binaries(){
     : '
     Make sure that curl / jq / python3 pass / binary exists in PATH
@@ -168,8 +176,7 @@ ica-context-switcher(){
       # Need to wrap this bit in a || true statement
       # Since Illumina tokens aren't padded
       (
-        base64 --decode 2>/dev/null || \
-        true
+        _get_base64_binary --decode 2>/dev/null || true
       )
     } | {
       jq --raw-output '.exp'
@@ -179,7 +186,7 @@ ica-context-switcher(){
   # Current time
   current_epoch_time="$(date "+%s")"
 
-  if [[ "${token_expiry}" -le "${current_epoch_time}" ]]; then
+  if [[ "${token_expiry}" -lt "${current_epoch_time}" ]]; then
     _echo_stderr "Token found but has expired, please run 'ica-add-access-token --scope \"${scope}\" --project-name \"${project_name}\"' and then rerun this command"
     return 1
   fi

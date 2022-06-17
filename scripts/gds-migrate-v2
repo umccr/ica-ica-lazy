@@ -204,6 +204,25 @@ if [[ -z "${ICAV2_ACCESS_TOKEN-}" ]]; then
 fi
 dest_project_access_token="${ICAV2_ACCESS_TOKEN}"
 
+# Quick check to see if access token is valid
+current_epoch_time="$(date +%s)"
+
+icav2_expiry_epoch_time="$( \
+  {
+    echo "${dest_project_access_token}" || jq '.exp'
+  } | {
+    cut -d'.' -f2
+  } | {
+     (get_base64_binary --decode 2>/dev/null || true)
+  } | {
+    jq --raw-output '.exp'
+  }
+)"
+
+if [[ "${icav2_expiry_epoch_time}" -lt "${current_epoch_time}" ]]; then
+  echo_stderr "Your ICAV2_ACCESS_TOKEN has expired. Please run a simple icav2 command such as 'icav2 projects list' and then recollect your ICAV2_ACCESS_TOKEN from $HOME/.icav2/.session.ica.yaml"
+fi
+
 # Get source token
 # Check project name in TOKENS PATH
 if [[ -z "$(jq --raw-output --arg project "${src_project}" 'select(.[$project] != null) | .[$project] | keys' <<< cat "$(get_tokens_path "${ICA_ICA_LAZY_HOME}")")" ]]; then
