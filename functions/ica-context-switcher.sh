@@ -176,7 +176,7 @@ ica-context-switcher(){
       # Need to wrap this bit in a || true statement
       # Since Illumina tokens aren't padded
       (
-        _get_base64_binary --decode 2>/dev/null || true
+        "$(_get_base64_binary)" --decode 2>/dev/null || true
       )
     } | {
       jq --raw-output '.exp'
