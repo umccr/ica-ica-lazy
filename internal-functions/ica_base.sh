@@ -160,9 +160,9 @@ get_scope_string(){
 # Personal access token functions
 get_default_api_key(){
   : '
-  Gets the api key from /ica/api-keys/default-api-key in users password store
+  Gets the api key by calling ~/.ica-ica-lazy/get_api_key.sh in users password store
   '
-  pass "${API_KEY_STORE_PATH}" 2>/dev/null
+  "${ICA_ICA_LAZY_HOME}/get_api_key.sh" 2>/dev/null
 }
 
 

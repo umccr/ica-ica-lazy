@@ -40,9 +40,9 @@ READ_ONLY_SCOPE_STRING="BSSH.RUNS.READ,DCS.USAGES.READ,ENS.SUBSCRIPTIONS.MANAGE,
 # Standard functions
 check_binaries(){
   : '
-  Make sure that curl / jq / python3 pass / binary exists in PATH
+  Make sure that curl / jq / python3 / binary exists in PATH
   '
-  if ! (type curl jq pass python3 1>/dev/null); then
+  if ! (type curl jq python3 1>/dev/null); then
     return 1
   fi
 }
@@ -73,7 +73,7 @@ print_help(){
     * curl
     * jq
     * python3
-    * pass
+    * pass (recommended but optional)
 
   Environment variables:
     * ICA_BASE_URL
