@@ -1,0 +1,215 @@
+#!/usr/bin/env bash
+
+: '
+Create an md5sum for a file with the suffix .md5sum
+
+This script takes in the following inputs:
+
+1. --gds-path
+2. --log-path
+
+This script performs the following steps:
+
+1. Creates a presigned url for uploading the .md5sum file to gds
+2. Runs a TES task that generates the md5sum file. The input file is streamed from GDS
+
+This script has the following outputs:
+N/A
+'
+
+set -euo pipefail
+
+# Help function
+print_help(){
+    echo "
+        Usage: ica-make-md5sum (--gds-path gds://volume-name/path-to-file.fastq.gz)
+                               (--log-path gds://volume-name/temp/logs/)
+                               [--help]
+
+        Options:
+            -g / --gds-path:  Required - Path to gds file we wish to md5sum
+            --log-path:      Required - Path to directory we wish to store the TES logs
+            --help:           Optional - Print this help and exit
+
+        Requirements:
+          * jq     (v1.5+)
+          * python3 (v3.4+)
+          * curl
+
+        Environment:
+          * ICA_BASE_URL
+          * ICA_ACCESS_TOKEN
+        "
+}
+
+binaries_check(){
+  : '
+  Check each of the required binaries are available
+  '
+  if ! (type jq python3 curl 1>/dev/null); then
+    return 1
+  fi
+}
+
+# Globals
+TEMPLATE_NAME="make-md5sum-run.json"
+
+# Get args
+gds_path=""
+log_path=""
+template_path="${ICA_ICA_LAZY_HOME-}/templates/${TEMPLATE_NAME}"
+
+
+# Get args from command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -g | --gds-path)
+      gds_path="$2"
+      shift 1
+      ;;
+    -l | --log-path)
+      log_path="$2"
+      shift 1
+      ;;
+    -h | --help)
+      print_help
+      exit 0
+      ;;
+  esac
+  shift 1
+done
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
+# Check and set args
+if [[ -z "${gds_path-}" ]]; then
+  echo_stderr "--gds-path not specified"
+  exit 1
+fi
+
+# Check and set args
+if [[ -z "${log_path-}" ]]; then
+  echo_stderr "--log-path not specified"
+  exit 1
+fi
+
+# Start
+if [[ -z "${ICA_BASE_URL-}" ]]; then
+    echo "Error: Need to set var \"ICA_BASE_URL\"" 1>&2
+    exit 1
+fi
+
+if [[ -z "${ICA_ACCESS_TOKEN-}" ]]; then
+    echo "Error: Need to set var \"ICA_ACCESS_TOKEN\"" 1>&2
+    echo "Error: Please first run ica-context-switcher" 1>&2
+    exit 1
+fi
+
+# Check token expiry
+check_token_expiry "${ICA_ACCESS_TOKEN}"
+
+# Check gds file exists
+gds_volume_name="$( \
+  get_volume_from_gds_path \
+    "${gds_path}" \
+)"
+gds_file_path="$( \
+  get_file_path_from_gds_path \
+    "${gds_path}" \
+)"
+
+if ! gds_file_id="$( \
+  get_file_id \
+    "${gds_volume_name}" \
+    "${gds_file_path}" \
+    "${ICA_BASE_URL}" \
+    "${ICA_ACCESS_TOKEN}" \
+)"; then
+  echo_stderr "Could not get file id from '${gds_path}', please make sure the file exists and you have permissions to access this file"
+  exit 1
+fi
+
+echo_stderr "Got the file id for '${gds_path}' as '${gds_file_id}'"
+
+# Now check md5sum path is also okay and non-existent
+md5sum_gds_path="${gds_file_path}.md5sum"
+if gds_md5sum_file_path_id="$( \
+  get_file_id \
+    "${gds_volume_name}" \
+    "${md5sum_gds_path}" \
+    "${ICA_BASE_URL}" \
+    "${ICA_ACCESS_TOKEN}" \
+)" && [[ -n "${gds_md5sum_file_path_id}" ]] ; then
+  echo_stderr "md5sum output path '${gds_md5sum_file_path_id}' already exists! Please delete first before trying again"
+  exit 1
+fi
+
+
+# Get aws access creds
+if ! md5sum_upload_presigned_url_json_str="$( \
+  get_aws_write_file_access \
+    "${gds_volume_name}" \
+    "${md5sum_gds_path}" \
+    "${ICA_BASE_URL}" \
+    "${ICA_ACCESS_TOKEN}"
+)"; then
+  echo_stderr "Could not generate aws s3 credentials for this file, do you have admin permissions in this project context?"
+  exit 1
+fi
+
+if [[ -z "${md5sum_upload_presigned_url_json_str}" ]]; then
+  echo_stderr "Could not generate aws s3 credentials for this file, do you have admin permissions in this project context?"
+  exit 1
+fi
+
+# Populate template
+temp_md5sum_creation_tes_path="$("$(get_mktemp_binary)" -t "md5sum_creation.XXX.json")"
+cp "${template_path}" "${temp_md5sum_creation_tes_path}"
+
+"$(get_sed_binary)" \
+  -i \
+  "
+    s#__GDS_FILE_URL__#${gds_path}#;
+    s#__GDS_FILE_NAME__#$(basename "${gds_file_path}")#g;
+    s#__AWS_ACCESS_KEY_ID__#$(jq --raw-output '.access_Key_Id' <<< "${md5sum_upload_presigned_url_json_str}")#;
+    s#__AWS_SECRET_ACCESS_KEY__#$(jq --raw-output '.secret_Access_Key' <<< "${md5sum_upload_presigned_url_json_str}")#;
+    s#__AWS_SESSION_TOKEN__#$(jq --raw-output '.session_Token' <<< "${md5sum_upload_presigned_url_json_str}")#;
+    s#__AWS_REGION__#$(jq --raw-output '.region' <<< "${md5sum_upload_presigned_url_json_str}")#;
+    s#__AWS_BUCKET_NAME__#$(jq --raw-output '.bucketName' <<< "${md5sum_upload_presigned_url_json_str}")#;
+    s#__AWS_KEY_PREFIX__#$(jq --raw-output '.keyPrefix' <<< "${md5sum_upload_presigned_url_json_str}")#;
+    s#__GDS_SYSTEM_FILES_PATH__#${log_path}#;
+  " \
+  "${temp_md5sum_creation_tes_path}"
+
+# Launch TES task
+echo_stderr "Launching TES task"
+tes_task_id="$(curl \
+    --silent \
+    --fail \
+    --location \
+    --request POST \
+    --header 'Accept: application/json' \
+    --header 'Content-Type: application/*+json' \
+    --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+    --data "@${temp_md5sum_creation_tes_path}" \
+    --url "${ICA_BASE_URL}/v1/tasks/runs" |
+    jq '.id')"
+
+echo_stderr "Launching data transfer with task run ${tes_task_id}"
+echo_stderr "Once the md5sum creation task is complete you may remove the log directory \"${log_path}\""
+
+# rm "${temp_md5sum_creation_tes_path}"

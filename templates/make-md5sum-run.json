@@ -1,0 +1,38 @@
+{
+  "name": "make-md5sum",
+  "execution": {
+    "image": {
+      "name": "amazon/aws-cli",
+      "tag": "latest"
+    },
+    "command": "bash",
+    "args": [
+      "-c",
+      "(cd \"/mount/mount/media/inputs/\"; md5sum \"__GDS_FILE_NAME__\") > \"__GDS_FILE_NAME__.md5sum\"; AWS_REGION=\"__AWS_REGION__\" AWS_ACCESS_KEY_ID=\"${SECURE_AWS_ACCESS_KEY_ID}\" AWS_SECRET_ACCESS_KEY=\"${SECURE_AWS_SECRET_ACCESS_KEY}\" AWS_SESSION_TOKEN=\"${SECURE_AWS_SESSION_TOKEN}\" aws s3 cp \"__GDS_FILE_NAME__.md5sum\" \"s3://__AWS_BUCKET_NAME__/__AWS_KEY_PREFIX__\";"
+    ],
+    "inputs": [
+      {
+        "mode": "stream",
+        "type": "File",
+        "url": "__GDS_FILE_URL__",
+        "path": "/mount/mount/media/inputs/__GDS_FILE_NAME__"
+      }
+    ],
+    "outputs": [],
+    "systemFiles": {
+      "url": "__GDS_SYSTEM_FILES_PATH__"
+    },
+    "environment": {
+      "variables": {
+        "SECURE_AWS_ACCESS_KEY_ID": "__AWS_ACCESS_KEY_ID__",
+        "SECURE_AWS_SECRET_ACCESS_KEY": "__AWS_SECRET_ACCESS_KEY__",
+        "SECURE_AWS_SESSION_TOKEN": "__AWS_SESSION_TOKEN__"
+      },
+      "resources": {
+        "type": "standardhicpu",
+        "size": "small"
+      }
+    },
+    "retryLimit": 0
+  }
+}
