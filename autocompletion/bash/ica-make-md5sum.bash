@@ -16,16 +16,17 @@ _ica-make-md5sum() {
     MYWORDS=("${words[@]:1:$cword}")
 
     FLAGS=('--help' 'Show command help' '-h' 'Show command help')
-    OPTIONS=('--project-name' 'Name of the project
-' '--port' 'The port you'"\\'"'d like to expose illumination on
+    OPTIONS=('--gds-path' 'Path to make md5sum from
+' '--log-path' 'Path to place TES logs
 ')
     __ica-make-md5sum_handle_options_flags
 
     case ${MYWORDS[$INDEX-1]} in
-      --project-name)
-        _ica-make-md5sum__option_project_name_completion
+      --gds-path)
+        _ica-make-md5sum__option_gds_path_completion
       ;;
-      --port)
+      --log-path)
+        _ica-make-md5sum__option_log_path_completion
       ;;
 
     esac
@@ -51,10 +52,15 @@ _ica-make-md5sum_compreply() {
     fi
 }
 
-_ica-make-md5sum__option_project_name_completion() {
+_ica-make-md5sum__option_gds_path_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_project_name="$(cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]')"
-    _ica-make-md5sum_compreply "$param_project_name"
+    local param_gds_path="$(gds-ls "${CURRENT_WORD}")"
+    _ica-make-md5sum_compreply "$param_gds_path"
+}
+_ica-make-md5sum__option_log_path_completion() {
+    local CURRENT_WORD="${words[$cword]}"
+    local param_log_path="$(gds-ls "${CURRENT_WORD}")"
+    _ica-make-md5sum_compreply "$param_log_path"
 }
 
 __ica-make-md5sum_dynamic_comp() {

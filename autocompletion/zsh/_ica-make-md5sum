@@ -10,10 +10,10 @@ _ica-make-md5sum() {
 
         # ---- Command: 
         _arguments -s  \
-            '--project-name[Name of the project
-]:project-name:_ica-make-md5sum__option_project_name_completion' \
-            '--port[The port you'"'"'d like to expose illumination on
-]:port' \
+            '--gds-path[Path to make md5sum from
+]:gds-path:_ica-make-md5sum__option_gds_path_completion' \
+            '--log-path[Path to place TES logs
+]:log-path:_ica-make-md5sum__option_log_path_completion' \
             '--help[Show command help]' \
             '-h[Show command help]' \
             && ret=0
@@ -22,11 +22,17 @@ _ica-make-md5sum() {
 
 }
 
-_ica-make-md5sum__option_project_name_completion() {
+_ica-make-md5sum__option_gds_path_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
-    IFS=$'\n' __dynamic_completion=( $( cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]' ) )
-    compadd -X "project_name:" $__dynamic_completion
+    IFS=$'\n' __dynamic_completion=( $( gds-ls "${CURRENT_WORD}" ) )
+    compadd -X "gds_path:" $__dynamic_completion
+}
+_ica-make-md5sum__option_log_path_completion() {
+    local __dynamic_completion
+    local CURRENT_WORD="$words[CURRENT]"
+    IFS=$'\n' __dynamic_completion=( $( gds-ls "${CURRENT_WORD}" ) )
+    compadd -X "log_path:" $__dynamic_completion
 }
 
 __ica-make-md5sum_dynamic_comp() {
