@@ -127,3 +127,146 @@ check_engine_parameters(){
 
   return 0
 }
+
+get_workflow_run_history(){
+  : '
+  Given a workflow id, return the workflow run history of that object (first 1000 items)
+  '
+  local workflow_run_id="$1"
+  local ica_base_url="$2"
+  local ica_access_token="$3"
+
+  # Other local vars
+  local page_size
+  local sort_type
+
+  page_size="1000"
+  sort_type="eventId%20asc"
+
+  params="$(
+    jq --null-input --raw-output \
+      --arg "page_size" "${page_size}" \
+      --arg "sort_type" "${sort_type}" \
+      '
+        {
+          "sort": ($sort_type),
+          "pageSize": ($page_size)
+        } |
+        to_entries |
+        map(
+          "\(.key)=\(.value)"
+        ) |
+        join("&")
+      ' \
+  )"
+
+  # Collect and return the history
+  curl --silent --fail --location \
+    --request GET \
+    --url "${ica_base_url}/v1/workflows/runs/${workflow_run_id}/history?${params}" \
+    --header "Accept: application/json" \
+    --header "Authorization: Bearer ${ica_access_token}" | \
+  jq --raw-output
+}
+
+clean_history(){
+  : '
+  Clean up the history of a WES task to return a nice clean summary of tasks spawned
+  '
+  local history="$1"
+
+  jq --raw-output \
+  '
+    def get_launch_objects:
+      .items |
+      map(
+        select(
+          (
+            has("eventDetails")
+          ) and
+          (
+            .eventDetails | length > 0
+          ) and
+          (
+            .eventDetails |
+            select(
+              has("additionalDetails")
+            )
+          ) and
+          (
+            .eventDetails.additionalDetails[0] |
+            has("TaskRunId")
+          )
+        )
+      ) |
+      map(
+        .eventDetails.additionalDetails[0] as $additional_details |
+        ($additional_details | .AbsolutePath | sub("_launch$"; "")) as $abs_path |
+        {
+          ($abs_path): {
+            "task_id": ($additional_details | .TaskRunId),
+            "task_name": ($abs_path | split("/")[-1]),
+            "task_launch_time": .timestamp,
+            "task_stderr": ($additional_details | .StdErr),
+            "task_stdout": ($additional_details | .StdOut)
+          }
+        }
+      ) | add
+    ;
+    def get_collection_objects:
+      .items |
+      map(
+        select(
+          (
+            has("eventDetails")
+          ) and
+          (
+            .eventDetails | length > 0
+          ) and
+          (
+            .eventDetails |
+            select(
+              has("additionalDetails")
+            )
+          ) and
+          (
+            .eventDetails.additionalDetails[0].AbsolutePath |
+            endswith("_collect")
+          )
+        )
+      ) |
+      map(
+        .eventDetails.additionalDetails[0] as $additional_details |
+        ($additional_details | .AbsolutePath | sub("_collect$"; "")) as $abs_path |
+        {
+          ($abs_path): {
+            "task_completion_time": .timestamp,
+          }
+        }
+      ) | add
+    ;
+    (. | get_launch_objects) as $launchers |
+    (. | get_collection_objects) as $completers |
+    $launchers | keys |
+    map(
+      . as $key_name |
+      {
+        ($key_name): (
+          [
+            $launchers[($key_name)],
+            $completers[($key_name)]
+          ] |
+          add |
+          {
+            "task_id": .task_id,
+            "task_name": .task_name,
+            "task_launch_time": .task_launch_time,
+            "task_completion_time": .task_completion_time?,
+            "task_stdout": .task_stdout,
+            "task_stderr": .task_stderr
+          }
+        )
+      }
+    )
+  ' <<< "${history}"
+}

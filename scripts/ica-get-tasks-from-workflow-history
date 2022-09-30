@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+
+: '
+Collect all of the tasks from a workflow history
+'
+
+print_help(){
+  echo "
+  Usage ica-get-tasks-from-workflow-history (--ica-workflow-run-id <ica-workflow-run-id>)
+
+  Description:
+    Given an ica workflow run id, this script collects the history from the history end point
+    and returns all of the tasks associated with this workflow
+
+
+  Options:
+    -w / --ica-workflow-run-id: The ICA workflow run ID you would like to find all the tasks from
+
+  Requirements:
+    * curl
+    * jq
+
+  Environment variables:
+    * ICA_ACCESS_TOKEN
+    * ICA_BASE_URL
+  "
+}
+
+# Get args from the command line
+ica_workflow_run_id=""
+
+# Get args from command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -w | --ica-workflow-run-id)
+      ica_workflow_run_id="$2"
+      shift 1
+      ;;
+    -h | --help)
+      print_help
+      exit 0
+      ;;
+    *)
+      print_help
+      exit 1
+      ;;
+  esac
+  shift 1
+done
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
+
+# Check ICA_BASE_URL env var is set
+if [[ -z "${ICA_BASE_URL-}" ]]; then
+  echo_stderr "Please set ICA_BASE_URL"
+  print_help
+  exit 1
+fi
+
+# Check we're in a project context
+if [[ -z "${ICA_ACCESS_TOKEN-}" ]]; then
+  echo_stderr "Please specify ICA_ACCESS_TOKEN"
+  print_help
+  exit 1
+fi
+
+# Make sure workflow run id is defined
+if [[ -z "${ica_workflow_run_id}" ]]; then
+  echo_stderr "Please specify --ica-workflow-run-id"
+  print_help
+  exit 1
+fi
+
+# Check token expiry
+check_token_expiry "${ICA_ACCESS_TOKEN}"
+
+# Get workflow history
+workflow_run_history="$( \
+  get_workflow_run_history \
+    "${ica_workflow_run_id}" \
+    "${ICA_BASE_URL}" \
+    "${ICA_ACCESS_TOKEN}" \
+)"
+
+# Perform 'magical' jq
+clean_history "${workflow_run_history}"
