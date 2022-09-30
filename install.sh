@@ -134,6 +134,11 @@ fi
 
 user_shell="$(get_user_shell)"
 
+if [[ -z "${user_shell}" ]]; then
+  echo_stderr "Couldn't get user shell, using '\$SHELL' env var '$SHELL'"
+  user_shell="$(basename "${SHELL}")"
+fi
+
 # Check bash version
 if [[ "${user_shell}" == "bash" ]]; then
   echo_stderr "Checking bash version"
@@ -156,6 +161,10 @@ if [[ "${user_shell}" == "bash" ]]; then
     echo_stderr "#######BASH COMPLETION######"
     echo_stderr "[[ -r \"\$(brew --prefix)/etc/profile.d/bash_completion.sh\" ]] && . \"\$(brew --prefix)/etc/profile.d/bash_completion.sh\""
     echo_stderr "############################"
+    echo_stderr "If you are running on Linux:"
+    echo_stderr "Please clone the following git repository \"https://github.com/scop/bash-completion\""
+    echo_stderr "And following the installation commands. If you do not have sudo permissions"
+    echo_stderr "Please set the --prefix option for the ./configure command to a local path"
     exit 1
   fi
 fi
