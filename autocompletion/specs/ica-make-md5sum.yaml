@@ -4,14 +4,10 @@ name: ica-make-md5sum
 title: Create an .md5sum prefix of a file
 
 options:
-  - name: project-name
+  - name: gds-path
     summary: |
-      Name of the project
+      Path to make md5sum from
     type: string
     completion:
       command_string: |-
-        cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]'
-  - name: port
-    summary: |
-      The port you'd like to expose illumination on
-    type: string
+        gds-ls "${CURRENT_WORD}"
