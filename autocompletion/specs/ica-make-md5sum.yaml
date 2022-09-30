@@ -11,3 +11,10 @@ options:
     completion:
       command_string: |-
         gds-ls "${CURRENT_WORD}"
+  - name: log-path
+    summary: |
+      Path to place TES logs
+    type: string
+    completion:
+      command_string: |-
+        gds-ls "${CURRENT_WORD}"
