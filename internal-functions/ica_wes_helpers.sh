@@ -175,9 +175,19 @@ clean_history(){
   '
   local history="$1"
 
+  # This jq snippet can be experimented with at
+  # https://jqplay.org/s/pyGwEyblC7w
   jq --raw-output \
   '
+    # Functions
     def get_launch_objects:
+      # Collect TaskRunId attributes from history objects
+      # Returns a dictionary where each key is defined by the eventDetails.additionalDetails[0].absolutePath attribute
+
+      # Get items that have .eventDetails attribute
+      # And that the eventDetails is not a null list
+      # And that the eventDetails.additionalDetails is not null
+      # And that the first eventDetails.additionalDetails item has a TaskRunId attribute
       .items |
       map(
         select(
@@ -199,6 +209,15 @@ clean_history(){
           )
         )
       ) |
+
+      # Convert items with TaskRunId to a dict with a single key
+      # Which is the .eventDetails.additionalDetails[0].AbsolutePath attribute
+      # The key has the following dict as a value
+      # Key: task_id, Value Description: task run id (trn...)
+      # Key: task_name, Value Description: Basename of task step
+      # Key: task_launch_time, Value Description: UTC Launch time of task
+      # Key: task_stderr, Value Description: GDS Path to task stderr
+      # Key: task_stdout, Value Description: GDS Path to task stdout
       map(
         .eventDetails.additionalDetails[0] as $additional_details |
         ($additional_details | .AbsolutePath | sub("_launch$"; "")) as $abs_path |
@@ -211,10 +230,19 @@ clean_history(){
             "task_stdout": ($additional_details | .StdOut)
           }
         }
-      ) | add
+      ) |
+      # Merge list of dictionaries together
+      add
     ;
     def get_collection_objects:
+      # Get item objects that end in _collect
+      # These define when a task has finished
+      # Returns a dictionary where each key is defined by the eventDetails.additionalDetails[0].absolutePath attribute
       .items |
+      # Filter items by
+      # has non empty eventDetails attribute
+      # And has eventDetails.additionalDetails attribute
+      # And eventDetails.additionalDetails[0].AbsolutePath attribute endswith "_collect"
       map(
         select(
           (
@@ -235,28 +263,62 @@ clean_history(){
           )
         )
       ) |
+
+      # Collect the task completion time
+      # Convert items to a dict with a single key
+      # Which is the .eventDetails.additionalDetails[0].AbsolutePath attribute
+      # The key has the following dict as a value
+      # Key: "task_completion_time", Value Description: UTC time of task collection
       map(
+        # Set the additionalDetails dict as variable $additional_details
         .eventDetails.additionalDetails[0] as $additional_details |
+
+        # Set the absolutePath with the _collect suffix removed as $abs_path
         ($additional_details | .AbsolutePath | sub("_collect$"; "")) as $abs_path |
+
+        # Return a dictionary with a single key $abs_path
+        # With the following dict as a value
+        # Key: "task_completion_time", Value Description: UTC time of task collection
         {
           ($abs_path): {
             "task_completion_time": .timestamp,
           }
         }
-      ) | add
+      ) |
+      # Merge dictionaries together
+      add
     ;
+    # Start process
+    # Return a list of tasks launched with their associated metadata
+
+    # Collect launch items
     (. | get_launch_objects) as $launchers |
+
+    # Collect completion items
     (. | get_collection_objects) as $completers |
+
+    # Iterate through launch items by key
     $launchers | keys |
+
+    # For each launch item key
+    # Collect the launch item dict
+    # And then collect the completion dict of the same key
+    # And merge the dictionaries together
     map(
+      # Set key name to variable $key_name
       . as $key_name |
+      # Output an object with a single key which is the launch item key name
       {
+        # Create an object with the launch item key name as the key
         ($key_name): (
           [
             $launchers[($key_name)],
             $completers[($key_name)]
           ] |
+          # Merge dictionaries together
           add |
+          # Write out the value of the launch item key name as a dict
+          # In the following order
           {
             "task_id": .task_id,
             "task_name": .task_name,
@@ -267,6 +329,8 @@ clean_history(){
           }
         )
       }
-    )
+    ) |
+    # Add all tasks together
+    add
   ' <<< "${history}"
 }
