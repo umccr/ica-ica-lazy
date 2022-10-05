@@ -47,7 +47,7 @@ run_links(){
     --rm \
     -it \
     --entrypoint "links" \
-    quay.io/umccr/alpine-links:2.21 \
+    ghcr.io/umccr/alpine-links:2.21 \
     	"${presigned_url}"
 }
 

@@ -25,7 +25,7 @@ for spec in specs/*.yaml; do
   docker run \
 	--volume "$PWD:$PWD" \
         --workdir "$PWD" \
-	quay.io/alexiswl4/appspec:0.006 \
+	ghcr.io/umccr/appspec:0.006 \
 	    appspec \
   		  completion \
 			  "${spec}" \
@@ -43,7 +43,7 @@ for spec in specs/*.yaml; do
   docker run \
 	--volume "$PWD:$PWD" \
         --workdir "$PWD" \
-	quay.io/alexiswl4/appspec:0.006 \
+	ghcr.io/umccr/appspec:0.006 \
 	    appspec \
 	  	  completion \
           		"${spec}" \
