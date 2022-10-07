@@ -42,6 +42,7 @@ _ica-context-switcher() {
 
 _ica-context-switcher_compreply() {
     local prefix=""
+    local IFS=$'\n'
     cur="$(printf '%q' "$cur")"
     IFS=$'\n' COMPREPLY=($(compgen -P "$prefix" -W "$*" -- "$cur"))
     __ltrim_colon_completions "$prefix$cur"
