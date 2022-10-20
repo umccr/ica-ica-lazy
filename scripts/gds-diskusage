@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+
+: '
+Use the xdiskusage function to generate an x11 screen of diskspace used by a volume / directory
+'
+
+# Set to fail
+set -euo pipefail
+
+# Functions
+# Help function
+print_help(){
+  echo "
+        Usage: gds-diskusage (--gds-path gds://volume-name/path-to-folder/)
+
+        Options:
+            -g / --gds-path:  Required - Path to gds directory
+
+        Requirements:
+          * jq     (v1.5+)
+          * python3 (v3.4+)
+          * curl
+          * xdiskusage (https://xdiskusage.sourceforge.net/)
+
+        Environment:
+          * ICA_BASE_URL
+          * ICA_ACCESS_TOKEN
+        "
+}
+
+binaries_check(){
+  : '
+  Check each of the required binaries are available
+  '
+  if ! (type jq python3 curl xdiskusage 1>/dev/null); then
+    return 1
+  fi
+}
+
+# Source ICA
+
+# Get args
+# Get args
+gds_path=""
+
+# Get args from command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -g | --gds-path)
+      gds_path="$2"
+      shift 1
+      ;;
+    -h | --help)
+      print_help
+      exit 0
+      ;;
+    *)
+      print_help
+      exit 1
+      ;;
+  esac
+  shift 1
+done
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
+# Ensure gds_path param is set
+if [[ -z "${gds_path}" ]]; then
+  echo_stderr "Please make sure --gds-path parameter is set"
+  exit 1
+fi
+
+# Start
+if [[ -z "${ICA_BASE_URL-}" ]]; then
+    echo "Error: Need to set var \"ICA_BASE_URL\"" 1>&2
+    exit 1
+fi
+
+if [[ -z "${ICA_ACCESS_TOKEN-}" ]]; then
+    echo "Error: Need to set var \"ICA_ACCESS_TOKEN\"" 1>&2
+    echo "Error: Please first run ica-context-switcher" 1>&2
+    exit 1
+fi
+
+# Check token expiry
+check_token_expiry "${ICA_ACCESS_TOKEN}"
+
+if ! binaries_check; then
+  exit 1
+fi
+
+# Get folder creator
+# Get volume path from gds path
+volume_name="$(get_volume_from_gds_path "${gds_path}")"
+folder_path="$(get_folder_path_from_gds_path "${gds_path}")"
+gds_path="gds://${volume_name}${folder_path}"  # Now comes with trailing slash
+
+# Check folder exists
+if ! folder_id="$(get_folder_id "${volume_name}" "${folder_path}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}")"; then
+  echo_stderr "Error: Directory '${gds_path}' does not exist."
+  exit 1
+fi
+
+# Trap and delete temp output file
+trap 'rm -f ${xdiskusage_temp_input_temp_dir}' EXIT
+
+xdiskusage_temp_input_temp_dir="$(mktemp -d)"
+
+xdiskusage_temp_input_file="${xdiskusage_temp_input_temp_dir}/${volume_name}/$(dirname "${folder_path}")/$(basename "${folder_path}")"
+mkdir -p "$(dirname "${xdiskusage_temp_input_file}")"
+
+get_directory_as_disk_usage \
+  "${volume_name}" \
+  "${folder_path}" \
+  "${ICA_BASE_URL}" \
+  "${ICA_ACCESS_TOKEN}" \
+ > "${xdiskusage_temp_input_file}"
+
+# Give user buffer to know what's happening
+echo_stderr "Starting up xdiskusage in three seconds"
+sleep 3
+
+# Start xdiskusage command
+xdiskusage "${xdiskusage_temp_input_file}"
+
+trap - EXIT
