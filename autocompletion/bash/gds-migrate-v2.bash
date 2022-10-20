@@ -92,10 +92,10 @@ elif [[ "$(basename "${SHELL}")" == "zsh" ]]; then
   project_name="${words[$project_index]}";
 fi;
 if [[ -z "${project_name}" ]]; then
-  gds-ls "${CURRENT_WORD}";
+  gds-ls "${CURRENT_WORD}" 2>/dev/null;
 else
   ica_access_token="$(jq --raw-output --arg project_name "${project_name}" '.[$project_name] | to_entries[0] | .value' "$HOME/.ica-ica-lazy/tokens/tokens.json")";
-  ICA_ACCESS_TOKEN="${ica_access_token}" gds-ls "${CURRENT_WORD}";
+  ICA_ACCESS_TOKEN="${ica_access_token}" gds-ls "${CURRENT_WORD}" 2>/dev/null;
 fi)"
     _gds-migrate-v2_compreply "$param_src_path"
 }

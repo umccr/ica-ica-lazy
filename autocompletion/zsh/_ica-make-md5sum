@@ -25,13 +25,13 @@ _ica-make-md5sum() {
 _ica-make-md5sum__option_gds_path_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
-    IFS=$'\n' __dynamic_completion=( $( gds-ls "${CURRENT_WORD}" ) )
+    IFS=$'\n' __dynamic_completion=( $( gds-ls "${CURRENT_WORD}" 2>/dev/null ) )
     compadd -X "gds_path:" $__dynamic_completion
 }
 _ica-make-md5sum__option_log_path_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
-    IFS=$'\n' __dynamic_completion=( $( gds-ls "${CURRENT_WORD}" ) )
+    IFS=$'\n' __dynamic_completion=( $( gds-ls "${CURRENT_WORD}" 2>/dev/null ) )
     compadd -X "log_path:" $__dynamic_completion
 }
 

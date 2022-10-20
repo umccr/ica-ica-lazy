@@ -27,7 +27,7 @@ _gds-sync-download() {
 _gds-sync-download__option_gds_path_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
-    IFS=$'\n' __dynamic_completion=( $( gds-ls "${CURRENT_WORD}" ) )
+    IFS=$'\n' __dynamic_completion=( $( gds-ls "${CURRENT_WORD}" 2>/dev/null ) )
     compadd -X "gds_path:" $__dynamic_completion
 }
 

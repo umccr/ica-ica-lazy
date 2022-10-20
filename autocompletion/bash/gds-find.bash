@@ -64,7 +64,7 @@ _gds-find_compreply() {
 
 _gds-find__option_gds_path_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_gds_path="$(gds-ls "${CURRENT_WORD}")"
+    local param_gds_path="$(gds-ls "${CURRENT_WORD}" 2>/dev/null)"
     _gds-find_compreply "$param_gds_path"
 }
 
