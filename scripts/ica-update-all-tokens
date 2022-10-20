@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+
+: '
+Update all tokens in ~/.ica-ica-lazy/tokens/tokens.json
+'
+
+# Generate personal access token
+
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
+# Check tokens path
+tokens_path="${ICA_ICA_LAZY_HOME}/tokens/tokens.json"
+
+if [[ ! -r "${tokens_path}" ]]; then
+  echo_stderr "Cannot read file '${tokens_path}'"
+  echo_stderr "No tokens to update, please create a token with ica-add-access-token command"
+  exit 1
+fi
+
+# Iterate through all tokens and update all tokens
+token_obj="$( \
+  jq --raw-output \
+    '
+      . as $in |
+      keys as $project_names |
+      [
+        $project_names[] |
+        $in[.] as $project_obj |
+        . as $project_name |
+        ($project_obj | keys) as $scope_names |
+        {
+           "\($project_name)": $scope_names
+        }
+      ] |
+      add
+    ' < "${ICA_ICA_LAZY_HOME}/tokens/tokens.json" \
+)"
+
+# Create personal access token
+echo_stderr "Creating a personal access token"
+personal_access_token="$(create_personal_access_token "${ICA_BASE_URL}")"
+# Check personal token
+if [[ -z "${personal_access_token}" || "${personal_access_token}" == "null" ]]; then
+  echo_stderr "Error: Could not create a personal access token"
+  exit 1
+fi
+
+# Iterate through projects
+for project_name in $(jq --raw-output --compact-output 'keys[]' <<< "${token_obj}"); do
+  echo_stderr "Getting project id from project name"
+  project_id="$(get_project_id_from_project_name "${project_name}" "${personal_access_token}")"
+
+  # Check project id
+  if [[ -z "${project_id}" || "${project_id}" == "null" ]]; then
+    echo_stderr "Error: Could not get project id from project name"
+    exit 1
+  fi
+
+  # Iterate through scopes for project
+  for scope in $(jq --raw-output --compact-output --arg project_name "${project_name}" '.[$project_name][]' <<< "${token_obj}"); do
+    echo "Updating project '$project_name', scope '$scope'" 1>&2
+    project_access_token="$(create_project_token "${project_id}" "${scope}" "${ICA_BASE_URL}" "${personal_access_token}")"
+    # Check project token
+    if [[ -z "${project_access_token}" || "${project_access_token}" == "null" ]]; then
+      echo_stderr "Error: Could not create a project access token for '${project_name}', scope '${scope}'"
+      exit 1
+    fi
+
+    ################################
+    # ADD PROJECT TOKEN TO FILE PATH
+    ################################
+    echo_stderr "Saving project token"
+    add_token_to_json_file "${project_name}" "${scope}" "${project_access_token}"
+  done
+done
+
+# Conclude
+echo_stderr "All tokens updated, please run 'ica-show-tokens' to confirm"
