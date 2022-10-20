@@ -7,4 +7,4 @@ parameters:
   - name: gds_path
     completion:
       command_string: |-
-        gds-ls "${CURRENT_WORD}"
+        gds-ls "${CURRENT_WORD}" 2>/dev/null
