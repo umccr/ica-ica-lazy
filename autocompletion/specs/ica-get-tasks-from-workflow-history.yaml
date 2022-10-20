@@ -4,7 +4,7 @@ name: ica-get-tasks-from-workflow-history
 title: Given a workflow run id, collect all task run ids spawned from this workflow run
 
 options:
-  - name: workflow-run-id
+  - name: ica-workflow-run-id
     summary: |
       ICA workflow run id
     type: string
