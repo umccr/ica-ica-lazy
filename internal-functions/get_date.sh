@@ -8,7 +8,7 @@ Functions to ensure that ica-access-token is not expired
 * warn_time_to_expiry
 '
 
-SECONDS_PER_WEEK="604800"
+SECONDS_PER_HOUR="3600"
 
 get_epoch_expiry(){
   : '
@@ -67,8 +67,8 @@ check_token_expiry(){
     # Token has expired
     echo_stderr "Error - Your access token has expired! Please refresh with 'ica-add-access-token'"
     exit 1
-  elif [[ "${seconds_to_expiry}" -le "${SECONDS_PER_WEEK}" ]]; then
-    # Warn user token expires in less than a week
+  elif [[ "${seconds_to_expiry}" -le "${SECONDS_PER_HOUR}" ]]; then
+    # Warn user token expires in less than an hour
     echo_stderr "$(warn_time_to_expiry "${seconds_to_expiry}")"
   fi
 }
