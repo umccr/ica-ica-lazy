@@ -10,8 +10,8 @@ _ica-get-tasks-from-workflow-history() {
 
         # ---- Command: 
         _arguments -s  \
-            '--workflow-run-id[ICA workflow run id
-]:workflow-run-id' \
+            '--ica-workflow-run-id[ICA workflow run id
+]:ica-workflow-run-id' \
             '--help[Show command help]' \
             '-h[Show command help]' \
             && ret=0

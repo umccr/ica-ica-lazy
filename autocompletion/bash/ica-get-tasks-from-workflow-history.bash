@@ -16,12 +16,12 @@ _ica-get-tasks-from-workflow-history() {
     MYWORDS=("${words[@]:1:$cword}")
 
     FLAGS=('--help' 'Show command help' '-h' 'Show command help')
-    OPTIONS=('--workflow-run-id' 'ICA workflow run id
+    OPTIONS=('--ica-workflow-run-id' 'ICA workflow run id
 ')
     __ica-get-tasks-from-workflow-history_handle_options_flags
 
     case ${MYWORDS[$INDEX-1]} in
-      --workflow-run-id)
+      --ica-workflow-run-id)
       ;;
 
     esac
