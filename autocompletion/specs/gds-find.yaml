@@ -10,7 +10,7 @@ options:
     type: string
     completion:
       command_string: |-
-        gds-ls "${CURRENT_WORD}"
+        gds-ls "${CURRENT_WORD}" 2>/dev/null
   - name: type
     summary: |
       File or directory

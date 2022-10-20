@@ -10,7 +10,7 @@ options:
       The gds folder path
     completion:
       command_string: |-
-        gds-ls "${CURRENT_WORD}"
+        gds-ls "${CURRENT_WORD}" 2>/dev/null
   - name: output-prefix
     summary: |
       The output-prefix of the final bash file
