@@ -21,6 +21,98 @@ get_volume_from_gds_path() {
   python3 -c "from urllib.parse import urlparse; print(urlparse(\"${gds_path}\").netloc)"
 }
 
+get_directory_as_disk_usage(){
+  : '
+  Returns output as sizeInBytes\tpath
+  '
+  local volume_name="$1"
+  local gds_path_attr="$2"
+  local ica_base_url="$3"
+  local ica_access_token="$4"
+
+  local params
+  local next_page_token="null"
+  local page_size="1000"
+  local page_number="0"
+  local total_item_count="0"
+
+  while :; do
+    params="$(  \
+      jq --null-input --raw-output \
+        --arg volume_name "${volume_name}" \
+        --arg path "${gds_path_attr}*" \
+        --arg recursive "true" \
+        --arg total_item_count "totalItemCount" \
+        --arg next_page_token "${next_page_token}" \
+        --arg page_size "${page_size}" \
+        '
+          {
+            "volume.name": $volume_name,
+            "path": $path,
+            "recursive": $recursive,
+            "pageToken": $next_page_token,
+            "pageSize": $page_size,
+            "include": $total_item_count
+          } |
+          to_entries |
+          map(
+            select(.value == "null" | not)
+          ) |
+          map(
+            "\(.key)=\(.value)"
+          ) |
+          join("&")
+        ' \
+    )"
+
+    response="$( \
+      curl \
+        --fail --silent --location \
+        --header "Accept: application/json" \
+        --header "Authorization: Bearer ${ica_access_token}" \
+        --url "${ica_base_url}/v1/files?${params}"
+    )"
+
+    # Print outputs
+    jq --raw-output \
+      '
+        .items |
+        map(
+          select(
+            .sizeInBytes == null |
+            not
+          )
+        ) |
+        map(
+          {
+            "sizeInKb": ((.sizeInBytes / 1024) | floor),
+            "path": .path
+          }
+        ) |
+        map(
+          "\(.sizeInKb)\t\(.path)"
+        ) |
+        .[]
+      ' <<< "${response}"
+
+    next_page_token="$( \
+      jq --raw-output '.nextPageToken' <<< "${response}"
+    )"
+
+    if [[ "${next_page_token}" == "null" ]]; then
+      break
+    else
+      # Report number of files to go
+      total_item_count="$( \
+        jq --raw-output '.totalItemCount' <<< "${response}"
+      )"
+      page_number=$((page_number+1))
+      echo_stderr "Collected $((page_number * page_size)) of ${total_item_count} files"
+    fi
+
+  done
+}
+
 # Get folder path
 get_folder_path_from_gds_path() {
   : '
