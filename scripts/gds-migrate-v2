@@ -209,11 +209,11 @@ current_epoch_time="$(date +%s)"
 
 icav2_expiry_epoch_time="$( \
   {
-    echo "${dest_project_access_token}" || jq '.exp'
+    echo "${dest_project_access_token}"
   } | {
     cut -d'.' -f2
   } | {
-     (get_base64_binary --decode 2>/dev/null || true)
+     "$(get_base64_binary)" --decode 2>/dev/null || true
   } | {
     jq --raw-output '.exp'
   }
