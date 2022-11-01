@@ -1,0 +1,44 @@
+{
+  "name": "fastq-gzip-to-ora",
+  "execution": {
+    "image": {
+      "name": "699120554104.dkr.ecr.us-east-1.amazonaws.com/public/dragen",
+      "tag": "4.0.3"
+    },
+    "command": "bash",
+    "args": [
+      "-c",
+      "ln -s /mount/mount/media/inputs/fastqs/ __INPUT_FOLDER_NAME__; ln -s __INPUT_FOLDER_NAME__/Reports/fastq_list.csv fastq_list.csv; /opt/edico/bin/dragen --partial-reconfig HMM --ignore-version-check true; /opt/edico/bin/dragen --enable-map-align false --fastq-list fastq_list.csv --enable-ora true --ora-interleaved-compression __IS_INTERLEAVED__ --ora-reference /mount/mount/media/inputs/ora-reference/ --output-directory /mount/mount/media/outputs/ --fastq-list-all-samples true"
+    ],
+    "inputs": [
+      {
+        "mode": "download",
+        "type": "manifest",
+        "url": "__GDS_MANIFEST_JSON_URL__",
+        "path": "/mount/mount/media/inputs/"
+      }
+    ],
+    "outputs": [
+      {
+        "path": "/mount/mount/media/outputs/",
+        "url": "s3://__AWS_S3_BUCKET__/__AWS_S3_PATH__",
+        "storageProvider": "aws",
+        "credentials": {
+          "AWS_ACCESS_KEY_ID": "__AWS_ACCESS_KEY_ID__",
+          "AWS_SECRET_ACCESS_KEY": "__AWS_SECRET_ACCESS_KEY__",
+          "AWS_SESSION_TOKEN": "__AWS_SESSION_TOKEN__"
+        }
+      }
+    ],
+    "systemFiles": {
+      "url": "__GDS_SYSTEM_FILES_PATH__"
+    },
+    "environment": {
+      "resources": {
+        "type": "fpga",
+        "size": "small"
+      }
+    },
+    "retryLimit": 0
+  }
+}
