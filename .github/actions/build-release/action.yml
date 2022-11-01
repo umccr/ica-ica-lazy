@@ -105,6 +105,9 @@ runs:
         # Add autocompletions
         rsync --archive \
           "autocompletion/" "release-${{ inputs.git_tag }}/autocompletion/"
+        
+        # Add version txt file
+        echo "${{ inputs.git_tag }}" > "release-${{ inputs.git_tag }}/version.txt"
 
         # Add install.sh
         cp "install.sh" "release-${{ inputs.git_tag }}/install.sh"

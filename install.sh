@@ -265,6 +265,15 @@ rsync --delete --archive \
 rsync --delete --archive \
   "$(get_this_path)/templates/" "${main_dir}/templates/"
 
+################
+# COPY VERSION
+################
+if [[ -r "$(get_this_path)/version.txt" ]]; then
+  cp "$(get_this_path)/version.txt" "${main_dir}/version.txt"
+else
+  echo_stderr "Could not find version.txt inside release file, may be installed from src"
+  echo "latest" > "${main_dir}/version.txt"
+fi
 
 #################
 # PRINT USER HELP
