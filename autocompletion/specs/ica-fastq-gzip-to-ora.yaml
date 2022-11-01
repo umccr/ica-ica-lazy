@@ -1,0 +1,35 @@
+---
+name: ica-fastq-gzip-to-ora
+
+title: Compress fastq data from one directory into another
+
+options:
+  - name: input-path
+    type: string
+    summary: |
+      The input path
+    completion:
+      command_string: |-
+        gds-ls "${CURRENT_WORD}" 2>/dev/null
+  - name: output-path
+    type: string
+    summary: |
+      The output path
+    completion:
+      command_string: |-
+        gds-ls "${CURRENT_WORD}" 2>/dev/null
+  - name: ora-reference-path
+    type: string
+    summary: |
+      The ora reference path
+    completion:
+      command_string: |-
+        gds-ls "${CURRENT_WORD}" 2>/dev/null
+  - name: compression-type
+    summary: |
+      The type of compression used
+    type: string
+    enum: [ dragen, dragen-interleaved ]
+  - name: help
+    summary: |
+      Print help
