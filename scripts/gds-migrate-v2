@@ -317,21 +317,36 @@ v2_upload_file_to_presigned_url "${temp_manifest_path}" "${manifest_json_file_up
 sleep 3
 iter_counter=0
 while :; do
+  # Check counter
   if [[ "${iter_counter}" -gt 5 ]]; then
     echo_stderr "Could not get manifest presigned url after 30 seconds, exiting"
     exit 1
   fi
-  # Get the manifest presigned url
-  manifest_presigned_url="$(get_v2_file_presigned_url_from_file_id "${dest_project_id}" "${manifest_json_file_id}" "${icav2_base_url}" "${dest_project_access_token}")"
 
-  if [[ -z "${manifest_presigned_url}" || "${manifest_presigned_url}" == "null" ]]; then
+  # Get the manifest presigned url
+  if ! \
+    manifest_presigned_url="$( \
+      get_v2_file_presigned_url_from_file_id \
+        "${dest_project_id}" \
+        "${manifest_json_file_id}" \
+        "${icav2_base_url}" \
+        "${dest_project_access_token}" \
+    )"; then
     echo_stderr "Could not get manifest presigned url, sleeping five seconds and then trying again"
     sleep 5
     # Increment counter then sleep
     iter_counter="$((iter_counter + 1))"
     continue
   else
-    break
+    if [[ -z "${manifest_presigned_url}" || "${manifest_presigned_url}" == "null" ]]; then
+      echo_stderr "Could not get manifest presigned url, sleeping five seconds and then trying again"
+      sleep 5
+      # Increment counter then sleep
+      iter_counter="$((iter_counter + 1))"
+      continue
+    else
+      break
+    fi
   fi
 done
 
