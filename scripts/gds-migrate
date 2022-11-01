@@ -57,7 +57,7 @@ print_help(){
           * ICA_BASE_URL
 
         A token with at least read-only scope must be registered for the source path.
-        A taken with at least admin scope must be registered for the destination path
+        A token with at least admin scope must be registered for the destination path
 
         Example:
           gds-migrate --src-project production --src-path gds://production/primary_data/2020_FCID/ --dest-project development --dest-path gds://development/primary_data/2021_FCID/ --rsync-args '--include=*/,--include=*.fastq.gz,--exclude=*'
@@ -227,8 +227,15 @@ while :; do
     exit
   fi
   # Get the manifest presigned url
-  manifest_presigned_url="$(get_presigned_url_from_file_id "${manifest_file_id}" "${ICA_BASE_URL}" "${dest_project_access_token}")"
+  if ! manifest_presigned_url="$(get_presigned_url_from_file_id "${manifest_file_id}" "${ICA_BASE_URL}" "${dest_project_access_token}")"; then
+    echo_stderr "Could not get manifest presigned url, sleeping five seconds and then trying again"
+    sleep 5
+    # Increment counter then sleep
+    iter_counter="$((iter_counter + 1))"
+    continue
+  fi
 
+  # Check manifest is valid
   if [[ -z "${manifest_presigned_url}" || "${manifest_presigned_url}" == "null" ]]; then
     echo_stderr "Could not get manifest presigned url, sleeping five seconds and then trying again"
     sleep 5
