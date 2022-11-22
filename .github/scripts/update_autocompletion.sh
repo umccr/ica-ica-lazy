@@ -33,13 +33,6 @@ TEMPLATE_DIR="specs/"
       "${spec}" \
       --name "${name_root}" \
       --bash > "bash/${name_root}.bash"
-
-     # Overwrite shebang
-     sed -i '1c#!/usr/bin/env bash' "bash/${name_root}.bash"
-
-     # Append local IFS
-     sed -i 's/local prefix=""/local prefix=""\n    local IFS=\$'"'"'\\n'"'"'/' "bash/${name_root}.bash"
-
   done
 
   # Run the zsh completions
