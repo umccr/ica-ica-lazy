@@ -1,6 +1,6 @@
 #compdef ica-check-cwl-inputs
 
-# Generated with perl module App::Spec v0.013
+# Generated with perl module App::Spec v0.000
 
 _ica-check-cwl-inputs() {
     local program=ica-check-cwl-inputs
@@ -27,18 +27,22 @@ _ica-check-cwl-inputs() {
 _ica-check-cwl-inputs__option_input_json_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
-    IFS=$'\n' __dynamic_completion=( $( find $PWD -name '*.json' ) )
+    IFS=$'\n' __dynamic_completion=( $( 
+find $PWD -name '*.json'
+ ) )
     compadd -X "input_json:" $__dynamic_completion
 }
 _ica-check-cwl-inputs__option_ica_workflow_id_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
-    IFS=$'\n' __dynamic_completion=( $( curl \
+    IFS=$'\n' __dynamic_completion=( $( 
+curl \
   --silent \
   --request GET \
   --header "Authorization: Bearer $ICA_ACCESS_TOKEN" \
   "$ICA_BASE_URL/v1/workflows/?pageSize=1000" | \
 jq --raw-output '.items[] | .id'
+
  ) )
     compadd -X "ica_workflow_id:" $__dynamic_completion
 }

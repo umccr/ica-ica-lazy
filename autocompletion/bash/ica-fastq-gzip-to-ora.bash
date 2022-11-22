@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Generated with perl module App::Spec v0.013
+# Generated with perl module App::Spec v0.000
 
 _ica-fastq-gzip-to-ora() {
 
@@ -55,7 +55,7 @@ _ica-fastq-gzip-to-ora_compreply() {
     local prefix=""
     local IFS=$'\n'
     cur="$(printf '%q' "$cur")"
-    IFS=$'\n' COMPREPLY=($(compgen -P "$prefix" -W "$*" -- "$cur"))
+    IFS=$IFS COMPREPLY=($(compgen -P "$prefix" -W "$*" -- "$cur"))
     __ltrim_colon_completions "$prefix$cur"
 
     # http://stackoverflow.com/questions/7267185/bash-autocompletion-add-description-for-possible-completions
@@ -67,17 +67,23 @@ _ica-fastq-gzip-to-ora_compreply() {
 
 _ica-fastq-gzip-to-ora__option_input_path_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_input_path="$(gds-ls "${CURRENT_WORD}" 2>/dev/null)"
+    local param_input_path="$(
+gds-ls "${CURRENT_WORD}" 2>/dev/null
+)"
     _ica-fastq-gzip-to-ora_compreply "$param_input_path"
 }
 _ica-fastq-gzip-to-ora__option_output_path_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_output_path="$(gds-ls "${CURRENT_WORD}" 2>/dev/null)"
+    local param_output_path="$(
+gds-ls "${CURRENT_WORD}" 2>/dev/null
+)"
     _ica-fastq-gzip-to-ora_compreply "$param_output_path"
 }
 _ica-fastq-gzip-to-ora__option_ora_reference_path_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_ora_reference_path="$(gds-ls "${CURRENT_WORD}" 2>/dev/null)"
+    local param_ora_reference_path="$(
+gds-ls "${CURRENT_WORD}" 2>/dev/null
+)"
     _ica-fastq-gzip-to-ora_compreply "$param_ora_reference_path"
 }
 

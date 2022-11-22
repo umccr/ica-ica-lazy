@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Generated with perl module App::Spec v0.013
+# Generated with perl module App::Spec v0.000
 
 _ica-check-cwl-inputs() {
 
@@ -46,7 +46,7 @@ _ica-check-cwl-inputs_compreply() {
     local prefix=""
     local IFS=$'\n'
     cur="$(printf '%q' "$cur")"
-    IFS=$'\n' COMPREPLY=($(compgen -P "$prefix" -W "$*" -- "$cur"))
+    IFS=$IFS COMPREPLY=($(compgen -P "$prefix" -W "$*" -- "$cur"))
     __ltrim_colon_completions "$prefix$cur"
 
     # http://stackoverflow.com/questions/7267185/bash-autocompletion-add-description-for-possible-completions
@@ -58,17 +58,21 @@ _ica-check-cwl-inputs_compreply() {
 
 _ica-check-cwl-inputs__option_input_json_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_input_json="$(find $PWD -name '*.json')"
+    local param_input_json="$(
+find $PWD -name '*.json'
+)"
     _ica-check-cwl-inputs_compreply "$param_input_json"
 }
 _ica-check-cwl-inputs__option_ica_workflow_id_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_ica_workflow_id="$(curl \
+    local param_ica_workflow_id="$(
+curl \
   --silent \
   --request GET \
   --header "Authorization: Bearer $ICA_ACCESS_TOKEN" \
   "$ICA_BASE_URL/v1/workflows/?pageSize=1000" | \
-jq --raw-output '.items[] | .id')"
+jq --raw-output '.items[] | .id'
+)"
     _ica-check-cwl-inputs_compreply "$param_ica_workflow_id"
 }
 

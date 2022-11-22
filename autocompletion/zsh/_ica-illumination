@@ -1,6 +1,6 @@
 #compdef ica-illumination
 
-# Generated with perl module App::Spec v0.013
+# Generated with perl module App::Spec v0.000
 
 _ica-illumination() {
     local program=ica-illumination
@@ -25,7 +25,9 @@ _ica-illumination() {
 _ica-illumination__option_project_name_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
-    IFS=$'\n' __dynamic_completion=( $( cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]' ) )
+    IFS=$'\n' __dynamic_completion=( $( 
+cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]'
+ ) )
     compadd -X "project_name:" $__dynamic_completion
 }
 

@@ -1,6 +1,6 @@
 #compdef ica-fastq-gzip-to-ora
 
-# Generated with perl module App::Spec v0.013
+# Generated with perl module App::Spec v0.000
 
 _ica-fastq-gzip-to-ora() {
     local program=ica-fastq-gzip-to-ora
@@ -29,19 +29,25 @@ _ica-fastq-gzip-to-ora() {
 _ica-fastq-gzip-to-ora__option_input_path_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
-    IFS=$'\n' __dynamic_completion=( $( gds-ls "${CURRENT_WORD}" 2>/dev/null ) )
+    IFS=$'\n' __dynamic_completion=( $( 
+gds-ls "${CURRENT_WORD}" 2>/dev/null
+ ) )
     compadd -X "input_path:" $__dynamic_completion
 }
 _ica-fastq-gzip-to-ora__option_output_path_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
-    IFS=$'\n' __dynamic_completion=( $( gds-ls "${CURRENT_WORD}" 2>/dev/null ) )
+    IFS=$'\n' __dynamic_completion=( $( 
+gds-ls "${CURRENT_WORD}" 2>/dev/null
+ ) )
     compadd -X "output_path:" $__dynamic_completion
 }
 _ica-fastq-gzip-to-ora__option_ora_reference_path_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
-    IFS=$'\n' __dynamic_completion=( $( gds-ls "${CURRENT_WORD}" 2>/dev/null ) )
+    IFS=$'\n' __dynamic_completion=( $( 
+gds-ls "${CURRENT_WORD}" 2>/dev/null
+ ) )
     compadd -X "ora_reference_path:" $__dynamic_completion
 }
 

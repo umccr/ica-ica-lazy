@@ -1,6 +1,6 @@
 #compdef gds-migrate
 
-# Generated with perl module App::Spec v0.013
+# Generated with perl module App::Spec v0.000
 
 _gds-migrate() {
     local program=gds-migrate
@@ -33,13 +33,16 @@ _gds-migrate() {
 _gds-migrate__option_src_project_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
-    IFS=$'\n' __dynamic_completion=( $( cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]' ) )
+    IFS=$'\n' __dynamic_completion=( $( 
+cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]'
+ ) )
     compadd -X "src_project:" $__dynamic_completion
 }
 _gds-migrate__option_src_path_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
-    IFS=$'\n' __dynamic_completion=( $( project_index="-1";
+    IFS=$'\n' __dynamic_completion=( $( 
+project_index="-1";
 for i in "${!words[@]}"; do
    if [[ "${words[$i]}" == "--src-project" ]]; then
        project_index="$(expr $i + 1)";
@@ -51,19 +54,23 @@ else
   project_name="${words[$project_index]}";
   ica_access_token="$(jq --raw-output --arg project_name "${project_name}" '.[$project_name] | to_entries[0] | .value' "$HOME/.ica-ica-lazy/tokens/tokens.json")";
   ICA_ACCESS_TOKEN="${ica_access_token}" gds-ls "${CURRENT_WORD}" 2>/dev/null;
-fi ) )
+fi
+ ) )
     compadd -X "src_path:" $__dynamic_completion
 }
 _gds-migrate__option_dest_project_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
-    IFS=$'\n' __dynamic_completion=( $( cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]' ) )
+    IFS=$'\n' __dynamic_completion=( $( 
+cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]'
+ ) )
     compadd -X "dest_project:" $__dynamic_completion
 }
 _gds-migrate__option_dest_path_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
-    IFS=$'\n' __dynamic_completion=( $( project_index="-1";
+    IFS=$'\n' __dynamic_completion=( $( 
+project_index="-1";
 for i in "${!words[@]}"; do
    if [[ "${words[$i]}" == "--dest-project" ]]; then
        project_index="$(expr $i + 1)";
@@ -75,7 +82,8 @@ else
   project_name="${words[$project_index]}";
   ica_access_token="$(jq --raw-output --arg project_name "${project_name}" '.[$project_name] | to_entries[0] | .value' "$HOME/.ica-ica-lazy/tokens/tokens.json")";
   ICA_ACCESS_TOKEN="${ica_access_token}" gds-ls "${CURRENT_WORD}" 2>/dev/null;
-fi ) )
+fi
+ ) )
     compadd -X "dest_path:" $__dynamic_completion
 }
 

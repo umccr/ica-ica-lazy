@@ -1,6 +1,6 @@
 #compdef ica-context-switcher
 
-# Generated with perl module App::Spec v0.013
+# Generated with perl module App::Spec v0.000
 
 _ica-context-switcher() {
     local program=ica-context-switcher
@@ -25,7 +25,9 @@ _ica-context-switcher() {
 _ica-context-switcher__option_project_name_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
-    IFS=$'\n' __dynamic_completion=( $( cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]' ) )
+    IFS=$'\n' __dynamic_completion=( $( 
+cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]'
+ ) )
     compadd -X "project_name:" $__dynamic_completion
 }
 

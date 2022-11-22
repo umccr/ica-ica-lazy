@@ -1,6 +1,6 @@
 #compdef gds-blame
 
-# Generated with perl module App::Spec v0.013
+# Generated with perl module App::Spec v0.000
 
 _gds-blame() {
     local program=gds-blame
@@ -23,7 +23,9 @@ _gds-blame() {
 _gds-blame__option_gds_path_completion() {
     local __dynamic_completion
     local CURRENT_WORD="$words[CURRENT]"
-    IFS=$'\n' __dynamic_completion=( $( gds-ls "${CURRENT_WORD}" 2>/dev/null ) )
+    IFS=$'\n' __dynamic_completion=( $( 
+gds-ls "${CURRENT_WORD}" 2>/dev/null
+ ) )
     compadd -X "gds_path:" $__dynamic_completion
 }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Generated with perl module App::Spec v0.013
+# Generated with perl module App::Spec v0.000
 
 _ica-make-md5sum() {
 
@@ -43,7 +43,7 @@ _ica-make-md5sum_compreply() {
     local prefix=""
     local IFS=$'\n'
     cur="$(printf '%q' "$cur")"
-    IFS=$'\n' COMPREPLY=($(compgen -P "$prefix" -W "$*" -- "$cur"))
+    IFS=$IFS COMPREPLY=($(compgen -P "$prefix" -W "$*" -- "$cur"))
     __ltrim_colon_completions "$prefix$cur"
 
     # http://stackoverflow.com/questions/7267185/bash-autocompletion-add-description-for-possible-completions
@@ -55,12 +55,16 @@ _ica-make-md5sum_compreply() {
 
 _ica-make-md5sum__option_gds_path_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_gds_path="$(gds-ls "${CURRENT_WORD}" 2>/dev/null)"
+    local param_gds_path="$(
+gds-ls "${CURRENT_WORD}" 2>/dev/null
+)"
     _ica-make-md5sum_compreply "$param_gds_path"
 }
 _ica-make-md5sum__option_log_path_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_log_path="$(gds-ls "${CURRENT_WORD}" 2>/dev/null)"
+    local param_log_path="$(
+gds-ls "${CURRENT_WORD}" 2>/dev/null
+)"
     _ica-make-md5sum_compreply "$param_log_path"
 }
 

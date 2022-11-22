@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Generated with perl module App::Spec v0.013
+# Generated with perl module App::Spec v0.000
 
 _gds-migrate() {
 
@@ -57,7 +57,7 @@ _gds-migrate_compreply() {
     local prefix=""
     local IFS=$'\n'
     cur="$(printf '%q' "$cur")"
-    IFS=$'\n' COMPREPLY=($(compgen -P "$prefix" -W "$*" -- "$cur"))
+    IFS=$IFS COMPREPLY=($(compgen -P "$prefix" -W "$*" -- "$cur"))
     __ltrim_colon_completions "$prefix$cur"
 
     # http://stackoverflow.com/questions/7267185/bash-autocompletion-add-description-for-possible-completions
@@ -69,12 +69,15 @@ _gds-migrate_compreply() {
 
 _gds-migrate__option_src_project_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_src_project="$(cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]')"
+    local param_src_project="$(
+cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]'
+)"
     _gds-migrate_compreply "$param_src_project"
 }
 _gds-migrate__option_src_path_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_src_path="$(project_index="-1";
+    local param_src_path="$(
+project_index="-1";
 for i in "${!words[@]}"; do
    if [[ "${words[$i]}" == "--src-project" ]]; then
        project_index="$(expr $i + 1)";
@@ -86,17 +89,21 @@ else
   project_name="${words[$project_index]}";
   ica_access_token="$(jq --raw-output --arg project_name "${project_name}" '.[$project_name] | to_entries[0] | .value' "$HOME/.ica-ica-lazy/tokens/tokens.json")";
   ICA_ACCESS_TOKEN="${ica_access_token}" gds-ls "${CURRENT_WORD}" 2>/dev/null;
-fi)"
+fi
+)"
     _gds-migrate_compreply "$param_src_path"
 }
 _gds-migrate__option_dest_project_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_dest_project="$(cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]')"
+    local param_dest_project="$(
+cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]'
+)"
     _gds-migrate_compreply "$param_dest_project"
 }
 _gds-migrate__option_dest_path_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_dest_path="$(project_index="-1";
+    local param_dest_path="$(
+project_index="-1";
 for i in "${!words[@]}"; do
    if [[ "${words[$i]}" == "--dest-project" ]]; then
        project_index="$(expr $i + 1)";
@@ -108,7 +115,8 @@ else
   project_name="${words[$project_index]}";
   ica_access_token="$(jq --raw-output --arg project_name "${project_name}" '.[$project_name] | to_entries[0] | .value' "$HOME/.ica-ica-lazy/tokens/tokens.json")";
   ICA_ACCESS_TOKEN="${ica_access_token}" gds-ls "${CURRENT_WORD}" 2>/dev/null;
-fi)"
+fi
+)"
     _gds-migrate_compreply "$param_dest_path"
 }
 

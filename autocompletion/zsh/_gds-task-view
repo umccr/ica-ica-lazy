@@ -1,6 +1,6 @@
 #compdef gds-task-view
 
-# Generated with perl module App::Spec v0.013
+# Generated with perl module App::Spec v0.000
 
 _gds-task-view() {
     local program=gds-task-view

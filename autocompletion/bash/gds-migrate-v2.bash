@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Generated with perl module App::Spec v0.013
+# Generated with perl module App::Spec v0.000
 
 _gds-migrate-v2() {
 
@@ -57,7 +57,7 @@ _gds-migrate-v2_compreply() {
     local prefix=""
     local IFS=$'\n'
     cur="$(printf '%q' "$cur")"
-    IFS=$'\n' COMPREPLY=($(compgen -P "$prefix" -W "$*" -- "$cur"))
+    IFS=$IFS COMPREPLY=($(compgen -P "$prefix" -W "$*" -- "$cur"))
     __ltrim_colon_completions "$prefix$cur"
 
     # http://stackoverflow.com/questions/7267185/bash-autocompletion-add-description-for-possible-completions
@@ -69,12 +69,15 @@ _gds-migrate-v2_compreply() {
 
 _gds-migrate-v2__option_src_project_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_src_project="$(cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]')"
+    local param_src_project="$(
+cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]'
+)"
     _gds-migrate-v2_compreply "$param_src_project"
 }
 _gds-migrate-v2__option_src_path_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_src_path="$(project_index="-1";
+    local param_src_path="$(
+project_index="-1";
 project_name="";
 if [[ "$(basename "${SHELL}")" == "bash" ]]; then
   for i in "${!words[@]}"; do
@@ -96,23 +99,27 @@ if [[ -z "${project_name}" ]]; then
 else
   ica_access_token="$(jq --raw-output --arg project_name "${project_name}" '.[$project_name] | to_entries[0] | .value' "$HOME/.ica-ica-lazy/tokens/tokens.json")";
   ICA_ACCESS_TOKEN="${ica_access_token}" gds-ls "${CURRENT_WORD}" 2>/dev/null;
-fi)"
+fi
+)"
     _gds-migrate-v2_compreply "$param_src_path"
 }
 _gds-migrate-v2__option_dest_project_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_dest_project="$(if [[ -n "${ICAV2_ACCESS_TOKEN-}" ]]; then
+    local param_dest_project="$(
+if [[ -n "${ICAV2_ACCESS_TOKEN-}" ]]; then
   curl --silent --fail --location --request "GET" \
        --url "https://${ICAV2_BASE_URL-ica.illumina.com}/ica/rest/api/projects" \
        --header 'Accept: application/vnd.illumina.v3+json' \
        --header "Authorization: Bearer ${ICAV2_ACCESS_TOKEN}" | \
   jq --raw-output '.items[] | .name'
-fi)"
+fi
+)"
     _gds-migrate-v2_compreply "$param_dest_project"
 }
 _gds-migrate-v2__option_dest_path_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_dest_path="$(if [[ -n "${ICAV2_ACCESS_TOKEN-}" ]]; then
+    local param_dest_path="$(
+if [[ -n "${ICAV2_ACCESS_TOKEN-}" ]]; then
     project_index="-1";
     project_name="";
     if [[ "$(basename "${SHELL}")" == "bash" ]]; then
@@ -152,7 +159,8 @@ _gds-migrate-v2__option_dest_path_completion() {
     jq --raw-output \
       '.items[] | .data.details.path';
   fi
-fi)"
+fi
+)"
     _gds-migrate-v2_compreply "$param_dest_path"
 }
 

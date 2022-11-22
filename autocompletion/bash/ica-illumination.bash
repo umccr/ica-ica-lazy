@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Generated with perl module App::Spec v0.013
+# Generated with perl module App::Spec v0.000
 
 _ica-illumination() {
 
@@ -42,7 +42,7 @@ _ica-illumination_compreply() {
     local prefix=""
     local IFS=$'\n'
     cur="$(printf '%q' "$cur")"
-    IFS=$'\n' COMPREPLY=($(compgen -P "$prefix" -W "$*" -- "$cur"))
+    IFS=$IFS COMPREPLY=($(compgen -P "$prefix" -W "$*" -- "$cur"))
     __ltrim_colon_completions "$prefix$cur"
 
     # http://stackoverflow.com/questions/7267185/bash-autocompletion-add-description-for-possible-completions
@@ -54,7 +54,9 @@ _ica-illumination_compreply() {
 
 _ica-illumination__option_project_name_completion() {
     local CURRENT_WORD="${words[$cword]}"
-    local param_project_name="$(cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]')"
+    local param_project_name="$(
+cat "$HOME/.ica-ica-lazy/tokens/tokens.json" | jq -r 'keys[]'
+)"
     _ica-illumination_compreply "$param_project_name"
 }
 
