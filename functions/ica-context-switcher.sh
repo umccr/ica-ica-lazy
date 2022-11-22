@@ -165,22 +165,32 @@ ica-context-switcher(){
   fi
 
   # Poor man's token expiry
+  #  This logic appears to be breaking in zsh
+  #  token_expiry="$( \
+  #    {
+  #      # Print token to /dev/stdin
+  #      echo "${ica_access_token}"
+  #    } | {
+  #      # Collect second attribute
+  #      cut -d'.' -f2
+  #    } | {
+  #      # Need to wrap this bit in a || true statement
+  #      # Since Illumina tokens aren't padded
+  #      (
+  #        "$(_get_base64_binary)" --decode 2>/dev/null || true
+  #      )
+  #    } | {
+  #      jq --raw-output '.exp'
+  #    } \
+  #  )"
+
   token_expiry="$( \
-    {
-      # Print token to /dev/stdin
-      echo "${ica_access_token}"
-    } | {
-      # Collect second attribute
-      cut -d'.' -f2
-    } | {
-      # Need to wrap this bit in a || true statement
-      # Since Illumina tokens aren't padded
-      (
-        "$(_get_base64_binary)" --decode 2>/dev/null || true
-      )
-    } | {
-      jq --raw-output '.exp'
-    } \
+    echo "${ica_access_token}" | \
+    cut -d'.' -f2 | \
+    (
+      "$(_get_base64_binary)" --decode 2>/dev/null || true
+    ) | \
+    jq --raw-output '.exp' \
   )"
 
   # Current time
