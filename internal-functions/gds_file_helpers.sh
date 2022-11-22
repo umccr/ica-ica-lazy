@@ -35,6 +35,7 @@ get_directory_as_disk_usage(){
   local page_size="1000"
   local page_number="0"
   local total_item_count="0"
+  local response
 
   while :; do
     params="$(  \
@@ -135,47 +136,72 @@ get_folder_id(){
   local ica_base_url="$3"
   local ica_access_token="$4"
 
-  local data_params=( "--data" "volume.name=${volume_name}"
-                      "--data" "recursive=false"
-                      "--data" "pageSize=${MAX_PAGE_SIZE}" )
+  local data_params
+  local response
+  local next_page_token
 
-  if [[ -z "${gds_path_attr}" || "${gds_path_attr}" == "/" ]]; then
-    # Check volume exists
-    if ! check_volume "${volume_name}" "${ica_base_url}" "${ica_access_token}"; then
-      return 1
-    else
-      return 0
-    fi
-  fi
+  next_page_token="null"
 
+  while :; do
+      data_params=(
+        "--data" "volume.name=${volume_name}"
+        "--data" "recursive=false"
+        "--data" "pageSize=${MAX_PAGE_SIZE}"
+      )
 
-  if [[ -n "${gds_path_attr}" && "${gds_path_attr}" != "/" ]]; then
-    data_params+=( "--data" "path=$(get_parent_path "${gds_path_attr}")*" )
-  fi
+      # Check next token
+      if [[ ! "${next_page_token}" == "null" ]]; then
+        data_params+=( "--data" "pageToken=${next_page_token}" )
+      fi
 
-  if ! folders_obj="$(curl \
-                        --silent \
-                        --location \
-                        --fail \
-                        --request GET \
-                        --header "Authorization: Bearer ${ica_access_token}" \
-                        --url "${ica_base_url}/v1/folders" \
-                        --get \
-                        "${data_params[@]}" 2>/dev/null)"; then
-    return 1
-  fi
+      if [[ -z "${gds_path_attr}" || "${gds_path_attr}" == "/" ]]; then
+        # Check volume exists
+        if ! check_volume "${volume_name}" "${ica_base_url}" "${ica_access_token}"; then
+          return 1
+        else
+          return 0
+        fi
+      fi
 
-  if [[ "$(jq \
-            --raw-output \
-            --arg "gds_path_attr" "${gds_path_attr}" \
-            '.items[] | select ( .path == $gds_path_attr ) | .path' <<< "${folders_obj}")" != "${gds_path_attr}" ]]; then
-      return 1
-  fi
+      if [[ -n "${gds_path_attr}" && "${gds_path_attr}" != "/" ]]; then
+        data_params+=( "--data" "path=${gds_path_attr%/}*" )
+      fi
 
-  jq \
-    --raw-output \
-    --arg "gds_path_attr" "${gds_path_attr}" \
-    '.items[] | select ( .path == $gds_path_attr ) | .id' <<< "${folders_obj}"
+      if ! response="$( \
+        curl \
+          --silent \
+          --location \
+          --fail \
+          --request GET \
+          --header "Authorization: Bearer ${ica_access_token}" \
+          --url "${ica_base_url}/v1/folders" \
+          --get \
+          "${data_params[@]}" 2>/dev/null \
+      )"; then
+        return 1
+      fi
+
+      if [[ "$(jq \
+                --raw-output \
+                --arg "gds_path_attr" "${gds_path_attr}" \
+                '.items[] | select ( .path == $gds_path_attr ) | .path' <<< "${response}")" == "${gds_path_attr}" ]]; then
+          return 0
+      fi
+
+      # Get the next page token and run again
+      next_page_token="$( \
+        jq --raw-output \
+          '.nextPageToken' \
+          <<< "${response}"
+      )"
+
+      # If this is the last page and we didn't find the folder
+      # then return 1
+      if [[ "${next_page_token}" == "null" ]]; then
+        return 1
+      fi
+
+  done
 }
 
 get_folder_creator_username(){
@@ -251,10 +277,7 @@ check_path_is_folder(){
   local ica_base_url="$3"
   local ica_access_token="$4"
 
-  local data_params=( "--data" "volume.name=${volume_name}"
-                      "--data" "recursive=false"
-                      "--data" "pageSize=${MAX_PAGE_SIZE}" )
-
+  # Check volume exists first
   if [[ -z "${gds_path_attr}" || "${gds_path_attr}" == "/" ]]; then
     # Check volume exists
     if ! check_volume "${volume_name}" "${ica_base_url}" "${ica_access_token}"; then
@@ -264,29 +287,15 @@ check_path_is_folder(){
     fi
   fi
 
-
-  if [[ -n "${gds_path_attr}" && "${gds_path_attr}" != "/" ]]; then
-    data_params+=( "--data" "path=$(get_parent_path "${gds_path_attr}")*" )
-  fi
-
-  if ! folders_obj="$(curl \
-                        --silent \
-                        --location \
-                        --fail \
-                        --request GET \
-                        --header "Authorization: Bearer ${ica_access_token}" \
-                        --url "${ica_base_url}/v1/folders" \
-                        --get \
-                        "${data_params[@]}" 2>/dev/null)"; then
+  # Try get the folder id
+  if ! get_folder_id \
+    "${volume_name}" \
+    "${gds_path_attr}" \
+    "${ica_base_url}" \
+    "${ica_access_token}"; then
     return 1
   fi
-
-  if [[ "$(jq \
-            --raw-output \
-            --arg "gds_path_attr" "${gds_path_attr}" \
-            '.items[] | select ( .path == $gds_path_attr ) | .path' <<< "${folders_obj}")" != "${gds_path_attr}" ]]; then
-      return 1
-  fi
+  return 0
 }
 
 get_gds_file_list_as_digestible(){
@@ -306,6 +315,7 @@ get_gds_file_list_as_digestible(){
   local ica_base_url="$4"
   local ica_access_token="$5"
   local all_files_obj
+  local response
   local files_obj
   local files
   local next_page_token
@@ -315,11 +325,13 @@ get_gds_file_list_as_digestible(){
   all_files_obj="[]"
 
   while :; do
-    data_params=( "--data" "volume.name=${volume_name}"
-                  "--data" "recursive=${recursive}"
-                  "--data" "pageSize=${MAX_PAGE_SIZE}"
-                  "--data" "include=presignedUrl"
-                  "--data" "path=${gds_path_attr}*" )
+    data_params=(
+      "--data" "volume.name=${volume_name}"
+      "--data" "recursive=${recursive}"
+      "--data" "pageSize=${MAX_PAGE_SIZE}"
+      "--data" "include=presignedUrl"
+      "--data" "path=${gds_path_attr}*"
+    )
     if [[ ! "${next_page_token}" == "null" ]]; then
       data_params+=( "--data" "pageToken=${next_page_token}" )
     fi
@@ -376,28 +388,64 @@ get_gds_file_names(){
   local recursive="$4"
   local ica_base_url="$5"
   local ica_access_token="$6"
-  local files_obj
+  local response
   local files
+  local data_params
+  local next_page_token
 
-  files_obj="$(curl \
-                 --silent \
-                 --location \
-                 --fail \
-                 --request GET \
-                 --header "Authorization: Bearer ${ica_access_token}" \
-                 --url "${ica_base_url}/v1/files" \
-                 --get \
-                 --data "volume.name=${volume_name}" \
-                 --data "recursive=${recursive}" \
-                 --data "pageSize=${MAX_PAGE_SIZE}" \
-                 --data "path=${gds_path_attr}*" 2>/dev/null)"
+  next_page_token="null"
 
-  files="$(jq --raw-output \
-             --arg "volume_name" "${volume_name}" \
-             --arg "name" "${name}" \
-             '.items[] | select(.name | test($name)) | "gds://\($volume_name)\(.path)"' <<< "${files_obj}")"
+  while :; do
+    data_params=(
+      "--data" "volume.name=${volume_name}"
+      "--data" "recursive=${recursive}" \
+      "--data" "pageSize=${MAX_PAGE_SIZE}" \
+      "--data" "path=${gds_path_attr}*" \
+    )
 
-  printf "%s" "${files}" | sort -f
+    # Check next token
+    if [[ ! "${next_page_token}" == "null" ]]; then
+      data_params+=( "--data" "pageToken=${next_page_token}" )
+    fi
+
+    response="$( \
+      curl \
+        --silent \
+        --location \
+        --fail \
+        --request GET \
+        --header "Authorization: Bearer ${ica_access_token}" \
+        --url "${ica_base_url}/v1/files" \
+        --get \
+        "${data_params[@]}"
+    )"
+
+    files="$( \
+      jq --raw-output \
+        --arg "volume_name" "${volume_name}" \
+        --arg "name" "${name}" \
+        '
+          .items[] |
+          select(.name | test($name)) |
+          "gds://\($volume_name)\(.path)"
+        ' <<< "${response}"
+    )"
+
+    # Print out files
+    "$(get_printf_binary)" "%s" "${files}" | sort -f
+
+    # Get next page token
+    next_page_token="$( \
+      jq --raw-output \
+        '
+          .nextPageToken
+        ' <<< "${response}"
+    )"
+
+    if [[ "${next_page_token}" == "null" ]]; then
+      break
+    fi
+  done
 }
 
 get_gds_subfolder_names(){
@@ -409,35 +457,77 @@ get_gds_subfolder_names(){
   local name="${3-}"
   local ica_base_url="$4"
   local ica_access_token="$5"
-  local folders_obj
   local folders
+  local response
+  local data_params
+  local next_page_token
 
-  # Get folders and files
-  folders_obj="$(curl \
-                   --silent \
-                   --location \
-                   --fail \
-                   --request GET \
-                   --header "Authorization: Bearer ${ica_access_token}" \
-                   --url "${ica_base_url}/v1/folders" \
-                   --get \
-                   --data "volume.name=${volume_name}" \
-                   --data "recursive=false" \
-                   --data "pageSize=${MAX_PAGE_SIZE}" \
-                   --data "path=${gds_path_attr}*" 2>/dev/null)"
+  next_page_token="null"
 
-  if [[ -z "${name}" ]]; then
-    # We're returning the path
-    jq --compact-output --raw-output \
-      '.items[] | .path' <<< "${folders_obj}"
-  else
-    # We're printing the outputs with the volume name included
-    folders="$(jq --raw-output \
-                 --arg "volume_name" "${volume_name}" \
-                 --arg "name" "${name}" \
-                 '.items[] | select(.name|test($name)) | "gds://\($volume_name)\(.path)"' <<< "${folders_obj}")"
-    "$(get_printf_binary)" "%s" "${folders}" | sort -f
-  fi
+  while :; do
+    # Set data parameters
+    data_params=(
+      "--data" "volume.name=${volume_name}"
+      "--data" "recursive=false"
+      "--data" "pageSize=${MAX_PAGE_SIZE}"
+      "--data" "path=${gds_path_attr}*"
+    )
+
+    # Check next token
+    if [[ ! "${next_page_token}" == "null" ]]; then
+      data_params+=( "--data" "pageToken=${next_page_token}" )
+    fi
+
+    # Get folders and files
+    response="$( \
+      curl \
+        --silent \
+        --location \
+        --fail \
+        --request GET \
+        --header "Authorization: Bearer ${ica_access_token}" \
+        --url "${ica_base_url}/v1/folders" \
+        --get \
+        "${data_params[@]}" 2>/dev/null \
+    )"
+
+    # Get name
+    if [[ -z "${name}" ]]; then
+      # We're returning the path
+      jq --compact-output --raw-output \
+        '
+          .items[] |
+          .path
+        ' <<< "${response}"
+    else
+      # We're printing the outputs with the volume name included
+      folders="$( \
+        jq --raw-output \
+          --arg "volume_name" "${volume_name}" \
+          --arg "name" "${name}" \
+          '
+            .items[] |
+            select(.name|test($name)) |
+            "gds://\($volume_name)\(.path)"
+          ' <<< "${response}" \
+      )"
+      "$(get_printf_binary)" "%s" "${folders}" | sort -f
+    fi
+
+    # Get next page token
+    next_page_token="$( \
+      jq --raw-output \
+      '
+        .nextPageToken
+      ' <<< "${response}"
+    )"
+
+    # Check next page token
+    if [[ "${next_page_token}" == "null" ]]; then
+      break
+    fi
+
+  done
 }
 
 gds_search(){
@@ -500,7 +590,10 @@ print_volumes(){
       --get \
       --data "pageSize=${MAX_PAGE_SIZE}" 2>/dev/null | \
   jq --raw-output \
-    '.items[] | "gds://\(.name)"'
+    '
+      .items[] |
+      "gds://\(.name)"
+    '
 }
 
 print_files_and_subfolders(){
@@ -512,43 +605,150 @@ print_files_and_subfolders(){
   local gds_path_attr="$2"
   local ica_base_url="$3"
   local ica_access_token="$4"
+  local data_params
+  local next_page_token
+  local all_files_list
+  local all_folders_list
 
-  # Get folders and files
-  folders_obj="$(curl \
-                   --silent \
-                   --location \
-                   --fail \
-                   --request GET \
-                   --header "Authorization: Bearer ${ica_access_token}" \
-                   --url "${ica_base_url}/v1/folders" \
-                   --get \
-                   --data "volume.name=${volume_name}" \
-                   --data "recursive=false" \
-                   --data "pageSize=${MAX_PAGE_SIZE}" \
-                   --data "path=${gds_path_attr}*" 2>/dev/null)"
+  all_files_list="[]"
+  all_folders_list="[]"
 
-  files_obj="$(curl \
-                 --silent \
-                 --location \
-                 --fail \
-                 --request GET \
-                 --header "Authorization: Bearer ${ica_access_token}" \
-                 --url "${ica_base_url}/v1/files" \
-                 --get \
-                 --data "volume.name=${volume_name}" \
-                 --data "recursive=false" \
-                 --data "pageSize=${MAX_PAGE_SIZE}" \
-                 --data "path=${gds_path_attr}*" 2>/dev/null)"
+  # Get folders first
+  next_page_token="null"
+  while :; do
+
+    # Get data params
+    data_params=(
+      "--data" "volume.name=${volume_name}" \
+      "--data" "recursive=false" \
+      "--data" "pageSize=${MAX_PAGE_SIZE}" \
+      "--data" "path=${gds_path_attr}*"
+    )
+
+    # Check next token
+    if [[ ! "${next_page_token}" == "null" ]]; then
+      data_params+=( "--data" "pageToken=${next_page_token}" )
+    fi
+
+    # Get folders and files
+    response="$( \
+      curl \
+        --silent \
+        --location \
+        --fail \
+        --request GET \
+        --header "Authorization: Bearer ${ica_access_token}" \
+        --url "${ica_base_url}/v1/folders" \
+        --get \
+        "${data_params[@]}" 2>/dev/null \
+    )"
+
+    # Assign token
+    next_page_token="$( \
+      jq --raw-output \
+        '
+          .nextPageToken
+        ' <<< "${response}" \
+    )"
+
+    folders_list="$( \
+      jq \
+       --raw-output \
+       --compact-output \
+       --arg "volume_name" "${volume_name}" \
+       '.items |
+        map(
+            "gds://\($volume_name)\(.path)"
+        )
+       ' <<< "${response}" \
+    )"
+
+    all_folders_list="$( \
+      jq --raw-output \
+        --slurp \
+        'flatten' \
+        <<< "${all_folders_list}${folders_list}" \
+    )"
+
+    # Check next page token
+    if [[ "${next_page_token}" == "null" ]]; then
+      break
+    fi
+
+  done
+
+  next_page_token="null"
+  while :; do
+    # Get data params
+    data_params=(
+      "--data" "volume.name=${volume_name}" \
+      "--data" "recursive=false" \
+      "--data" "pageSize=${MAX_PAGE_SIZE}" \
+      "--data" "path=${gds_path_attr}*"
+    )
+
+    # Check next token
+    if [[ ! "${next_page_token}" == "null" ]]; then
+      data_params+=( "--data" "pageToken=${next_page_token}" )
+    fi
+
+    response="$( \
+      curl \
+        --silent \
+        --location \
+        --fail \
+        --request GET \
+        --header "Authorization: Bearer ${ica_access_token}" \
+        --url "${ica_base_url}/v1/files" \
+        --get \
+        "${data_params[@]}" 2>/dev/null \
+    )"
+
+    # Assign token
+    next_page_token="$( \
+      jq --raw-output \
+        '
+          .nextPageToken
+        ' <<< "${response}" \
+    )"
+
+    files_list="$( \
+      jq \
+       --raw-output \
+       --compact-output \
+       --arg "volume_name" "${volume_name}" \
+       '.items |
+        map(
+            "gds://\($volume_name)\(.path)"
+        )
+       ' <<< "${response}" \
+    )"
+
+    all_files_list="$( \
+      jq --raw-output \
+        --slurp \
+        'flatten' \
+        <<< "${all_files_list}${files_list}" \
+    )"
+
+    # Check next page token
+    if [[ "${next_page_token}" == "null" ]]; then
+      break
+    fi
+
+  done
 
   # Get jq items
-  folders="$(jq \
-              --raw-output \
-              --arg "volume_name" "${volume_name}" \
-              '.items[] | "gds://\($volume_name)\(.path)"' <<< "${folders_obj}")"
-  files="$(jq \
-            --raw-output \
-            --arg "volume_name" "${volume_name}" \
-            '.items[] | "gds://\($volume_name)\(.path)"' <<< "${files_obj}")"
+  folders="$( \
+    jq \
+    --raw-output \
+    '.[]' <<< "${all_folders_list}" \
+  )"
+  files="$( \
+    jq \
+    --raw-output \
+    '.[]' <<< "${all_files_list}" \
+  )"
 
   # Write out files and folders but sort on print
   if [[ -z "${files}" && -z "${folders}" ]]; then
@@ -573,12 +773,18 @@ create_gds_folder() {
   local access_token="$5"
 
   # Create a json object as the --data-raw attribute
-  body_arg="$(jq --raw-output \
-                 --arg "volumeName" "${volume_name}" \
-                 --arg "folderPath" "${folder_parent}/" \
-                 --arg "name" "${folder_name}" \
-                 '. | .["volumeName"]=$volumeName | .["folderPath"]=$folderPath | .["name"]=$name' <<< '{}'
-            )"
+  body_arg="$( \
+    jq --null-input --raw-output \
+      --arg "volumeName" "${volume_name}" \
+      --arg "folderPath" "${folder_parent}/" \
+      --arg "name" "${folder_name}" \
+      '
+        . |
+        .["volumeName"]=$volumeName |
+        .["folderPath"]=$folderPath |
+        .["name"]=$name
+      ' \
+  )"
 
   # Pipe curl output into jq to collect ID and return
   curl \
@@ -619,7 +825,10 @@ get_file_id(){
     "${base_url}/v1/files?volume.name=${volume_name}&path=${file_path}" | \
   jq \
     --raw-output \
-    '.items[] | .id'
+    '
+      .items[] |
+      .id
+    '
 }
 
 get_presigned_url_from_file_id(){
@@ -658,14 +867,19 @@ check_folder_exists(){
   folder_path="$(get_folder_path_from_gds_path "${input_value}")"
 
   # Return the folder id
-  folder_id="$(curl \
-                 --silent \
-                 --request GET \
-                 --header "Authorization: Bearer ${ica_access_token}" \
-                 "${ica_base_url}/v1/folders?volume.name=${volume_name}&path=${folder_path}" |
-               jq \
-                 --raw-output \
-                 '.items[] | .id')"
+  folder_id="$( \
+    curl \
+      --silent \
+      --request GET \
+      --header "Authorization: Bearer ${ica_access_token}" \
+      "${ica_base_url}/v1/folders?volume.name=${volume_name}&path=${folder_path}" |
+    jq \
+      --raw-output \
+      '
+        .items[] |
+        .id
+      ' \
+  )"
 
   if [[ -z "${folder_id}" || "${folder_id}" == "null" ]]; then
     echo_stderr "Could not get folder id for \"${input_value}\""
@@ -726,13 +940,19 @@ upload_gds_file(){
   local_file_name="$(python3 -c "from pathlib import Path; print(Path('${local_file_path}').name)")"
 
   # Create a json object as the --data-raw attribute
-  body_arg="$(jq --raw-output \
-                 --arg "name" "${local_file_name}" \
-                 --arg "volumeName" "${volume_name}" \
-                 --arg "folderPath" "${gds_file_path}/" \
-                 --arg "type" "application/json" \
-                 '. | .["name"]=$name | .["volumeName"]=$volumeName | .["folderPath"]=$folderPath' <<< '{}'
-            )"
+  body_arg="$( \
+    jq --null-input --raw-output \
+      --arg "name" "${local_file_name}" \
+      --arg "volumeName" "${volume_name}" \
+      --arg "folderPath" "${gds_file_path}/" \
+      --arg "type" "application/json" \
+      '
+        . |
+        .["name"]=$name |
+        .["volumeName"]=$volumeName |
+        .["folderPath"]=$folderPath
+      ' \
+  )"
 
   # Pipe curl output into jq to collect ID and return
   file_object="$(curl \
