@@ -107,7 +107,7 @@ gds_path_attr="$(get_path "${gds_path}")"
 
 # Print from
 if ! check_path_is_folder "${volume_name}" "${gds_path_attr}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"; then
-  print_files_and_subfolders "${volume_name}" "$(get_parent_path "${gds_path_attr}")" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"
+   print_files_and_subfolders "${volume_name}" "${gds_path_attr%/}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"
 else
-  print_files_and_subfolders "${volume_name}" "${gds_path_attr}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"
+   print_files_and_subfolders "${volume_name}" "${gds_path_attr}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"
 fi
