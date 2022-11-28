@@ -181,10 +181,23 @@ get_folder_id(){
         return 1
       fi
 
-      if [[ "$(jq \
-                --raw-output \
-                --arg "gds_path_attr" "${gds_path_attr}" \
-                '.items[] | select ( .path == $gds_path_attr ) | .path' <<< "${response}")" == "${gds_path_attr}" ]]; then
+      if [[ "$( \
+        jq \
+          --raw-output \
+          --arg "gds_path_attr" "${gds_path_attr}" \
+          '
+            .items[] |
+            select ( .path == $gds_path_attr ) |
+            .path
+          ' <<< "${response}" \
+        )" == "${gds_path_attr}" ]]; then
+          jq --raw-output \
+               --arg "gds_path_attr" "${gds_path_attr}" \
+             '
+               .items[] |
+               select ( .path == $gds_path_attr ) |
+               .id
+             ' <<< "${response}"
           return 0
       fi
 
