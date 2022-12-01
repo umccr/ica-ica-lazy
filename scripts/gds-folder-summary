@@ -1,0 +1,584 @@
+#!/usr/bin/env bash
+
+: '
+Create a summary of a GDS folder with the following additions
+'
+
+# Set to fail
+set -euo pipefail
+
+###########
+# FUNCTIONS
+###########
+
+# Help function
+print_help(){
+  echo "
+        Usage: gds-folder-summary (--gds-path gds://volume-name/path-to-src-folder/)
+                                  (--output-report-path output-report.yaml)
+                                  [--output-png-path output.png]
+                                  [--append-report | --overwrite]
+
+        Description:
+          Summarise a folder's
+
+        Options:
+            --output-report-path:            Required: Path to output-report.yaml
+            --output-png-path:               Optional: Name of the source project
+            --append-report:                 Optional: Append report to existing file
+            --overwrite-report:              Optional: Overwrite file
+                                             If output report path exists, user must specify one of --append-report or --overwrite-report
+
+        Requirements:
+          * jq     (v1.5+)
+          * python3 (v3.4+)
+          * gnuplot (if output png is specified
+
+        Environment:
+          * ICA_BASE_URL
+          * ICA_ACCESS_TOKEN
+
+        Example:
+          gds-folder-summary --gds-path gds://production/analysis_data/ --output-report-path output-report.yaml
+        "
+}
+
+get_realpath_binary(){
+  if [[ "${OSTYPE}" == "darwin"* ]]; then
+    echo "grealpath"
+  else
+    echo "realpath"
+  fi
+}
+
+
+# Inputs
+gds_path=""
+access_token="${ICA_ACCESS_TOKEN-}"
+base_url="${ICA_BASE_URL-}"
+
+output_report_path=""
+output_png_path=""
+append_report="false"
+overwrite_report="false"
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -g|--gds-path)
+            gds_path="$2"
+            shift 1
+        ;;
+        -o|--output-report-path)
+            output_report_path="$2"
+        ;;
+        -p|--output-png-path)
+            output_png_path="$("$(get_realpath_binary)" "$2")"
+        ;;
+        -a|--append-report)
+            append_report="true"
+        ;;
+        -f|--overwrite-report)
+            overwrite_report="true"
+        ;;
+        -h|--help)
+            print_help
+            exit 1
+    esac
+    shift
+done
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
+# Checks, ensure access_token is set
+if [[ -z "${access_token}" ]]; then
+  echo "Error: Need to set ICA_ACCESS_TOKEN env var" 1>&2
+  echo "Error: Please first run ica-context-switcher" 1>&2
+  print_help
+  exit 1
+elif [[ -z "${base_url}" ]]; then
+  echo_stderr "Error: Please set the env var ICA_BASE_URL"
+  print_help
+  exit 1
+else
+  # Check token expiry
+  check_token_expiry "${access_token}"
+fi
+
+# Check gds path exists
+
+# Get volume name / get folder path from gds path
+volume_name="$(get_volume_from_gds_path "${gds_path}")"
+folder_path="$(get_folder_path_from_gds_path "${gds_path}")"
+
+# Collect folder id
+if ! folder_id="$( \
+    get_folder_id \
+      "${volume_name}" \
+      "${folder_path}" \
+      "${base_url}" \
+      "${access_token}" \
+  )"; then
+    echo_stderr "Could not get folder id for --gds-path value '${gds_path}'"
+    exit 1
+fi
+
+# Ensure output report path is defined
+if [[ -z "${output_report_path-}" ]]; then
+  echo_stderr "Please specify --output-report-path parameter"
+  exit 1
+fi
+
+# Check output report path parent exists
+if [[ ! -d "$(dirname "${output_report_path}")" ]]; then
+  echo_stderr "Parent directory of --output-report-path value '${output_report_path}' does not exist"
+  exit 1
+fi
+
+# Check if parent png path exists
+if [[ -n "${output_png_path}" ]]; then
+  # Check if gnuplot is installed
+  if ! type gnuplot 1>/dev/null 2>&1; then
+    echo_stderr "--output-png-path specified but gnuplot not installed, please install gnuplot first"
+    exit 1
+  fi
+  # Check directory of output png path exists
+  if [[ ! -d "$(dirname "${output_png_path}")" ]]; then
+    echo_stderr "Parent directory of --output-png-path value '${output_png_path}' does not exist"
+    exit 1
+  fi
+fi
+
+# Check if output path exists and one of overwrite or append is set
+if [[ -r "${output_report_path}" ]]; then
+  if [[ "${append_report}" == "false" && "${overwrite_report}" == "false" ]]; then
+    echo_stderr "--output-report-path value '${output_report_path}' exists but not one of --append-report nor --overwrite-report was specified"
+  fi
+fi
+
+echo_stderr "Collecting all files"
+# Get files obj
+if ! files_obj=$( \
+    get_recursive_list_of_files \
+      "${volume_name}" \
+      "${folder_path}" \
+      "${base_url}" \
+      "${access_token}" \
+  ); then
+    echo_stderr "Could not get all files from '${gds_path}'"
+    exit 1
+fi
+
+# Get folders obj
+if ! folders_obj=$( \
+    get_recursive_list_of_folders \
+      "${volume_name}" \
+      "${folder_path}" \
+      "${base_url}" \
+      "${access_token}" \
+  ); then
+    echo_stderr "Could not get all folders from '${gds_path}'"
+    exit 1
+fi
+
+# Count files
+num_files="$( \
+  jq --raw-output \
+    '
+      length
+    ' <<< "${files_obj}"
+)"
+
+# Count folders
+num_folders="$( \
+  jq --raw-output \
+    '
+      length
+    ' <<< "${folders_obj}"
+)"
+
+
+# Get folder size
+folder_size="$( \
+  jq --raw-output \
+    '
+      def to_gb:
+        (
+          (. / pow(2; 30)) + 0.5
+        ) |
+        floor;
+      map(
+        .sizeInBytes
+      ) |
+      add |
+      "\(. | to_gb) Gb"
+    ' <<< "${files_obj}"
+)"
+
+# Get num files by format
+num_files_by_format="$( \
+  jq --raw-output \
+    '
+      map(
+        select(.format == null | not)
+      ) |
+      group_by(.format) |
+      map(
+        {
+          (map(.format) | unique[0]): length
+        }
+      ) |
+      add
+    ' <<< "${files_obj}"
+)"
+
+# Get size by format
+folder_size_by_format="$( \
+  jq --raw-output \
+    '
+      def to_gb:
+        (
+          (. / pow(2; 30)) + 0.5
+        ) |
+        floor;
+      . |
+      map(
+        select(
+         .archiveStatus == "None"
+        )
+      ) |
+      map(
+        select(.format == null | not)
+      ) |
+      group_by(
+        .format
+      ) |
+        map(
+          {
+            (map(.format) | unique[0]): "\((map(.sizeInBytes) | add) | to_gb) Gb"
+          }
+        ) |
+      add
+    ' <<< "${files_obj}"
+)"
+
+
+# Get folder size by user
+folder_size_by_user="$( \
+  unique_users="$( \
+    jq --raw-output \
+      --compact-output \
+      '
+        . |
+        map(
+         .createdBy
+        ) |
+        unique
+      ' \
+      <<< "${files_obj}"
+  )"
+  user_by_id_obj="$( \
+    jq --raw-output \
+      --slurp \
+      '
+        add
+      ' \
+      <<< "$( \
+        for account_id in $(jq --raw-output '.[]' <<< "${unique_users}"); do
+          curl \
+            --silent \
+            --location \
+            --fail \
+            --request GET \
+            --header "Accept: application/json" \
+            --header "Authorization: Bearer ${access_token}" \
+            --url "${base_url}/v1/accounts/${account_id}" | \
+          jq \
+            --raw-output \
+            '
+              {
+                (.id): (.name)
+              }
+            '
+        done
+      )" \
+  )"
+
+  jq --raw-output \
+    --argjson user_by_id_json "${user_by_id_obj}" \
+    '
+      def to_gb:
+        (
+          (. / pow(2; 30)) + 0.5
+        ) |
+        floor;
+      def get_user_id:
+        (map(.createdBy) | unique[0]);
+      group_by(
+        .createdBy
+      ) |
+        map(
+          {
+            ($user_by_id_json[. | get_user_id]): "\((map(.sizeInBytes) | add) | to_gb) Gb"
+          }
+        ) |
+      add
+    ' <<< "${files_obj}"
+)"
+
+# Create output
+summary_text="$( \
+  yq --prettyPrint <<< "$( \
+    echo "---"
+    jq --null-input --raw-output \
+      --arg gds_path "${gds_path}" \
+      --arg num_files "${num_files}" \
+      --arg num_folders "${num_folders}" \
+      --arg folder_size "${folder_size}" \
+      --argjson num_files_by_format "${num_files_by_format}" \
+      --argjson folder_size_by_format "${folder_size_by_format}" \
+      --argjson folder_size_by_user "${folder_size_by_user}" \
+      '
+        {
+          "gds_path": $gds_path,
+          "num_files": $num_files | tonumber,
+          "num_folders": $num_folders | tonumber,
+          "folder_size": $folder_size,
+          "num_files_by_format": $num_files_by_format,
+          "folder_size_by_format": $folder_size_by_format,
+          "folder_size_by_user": $folder_size_by_user
+        }
+      ' \
+  )"
+)"
+
+# Write out summary text
+if [[ "${append_report}" == "true" ]]; then
+  echo "${summary_text}" >> "${output_report_path}"
+else
+  echo "${summary_text}" > "${output_report_path}"
+fi
+
+if [[ -z "${output_png_path-}" ]]; then
+  exit 0
+fi
+
+echo_stderr "Creating output plot"
+
+# Plot storage over time with chart
+archives_obj="$( \
+  jq --raw-output \
+    '
+      def accumulates(f):
+        foreach .[] as $row
+          (0;
+           . + ($row | f) ;
+           . as $x | $row | (f = $x))
+      ;
+      def to_gb:
+        (
+          (. / pow(2; 30)) + 0.5
+        ) |
+        floor
+      ;
+      def to_csv:
+        (map(keys) | add | unique) as $cols |
+        map(. as $row | $cols | map($row[.])) as $rows |
+        $cols, $rows[] | @csv
+      ;
+      def get_file_size_over_time:
+        . |
+        [
+          if .archiveStatus == "None" then
+            # Unarchived return just the size in bytes with the
+            # modification timestamp
+            {
+              "archiveStatus": "None",
+              "timeModified": .timeModified,
+              "sizeInBytes": .sizeInBytes
+            }
+          else
+            # Add in initial file
+            {
+              "archiveStatus": "None",
+              "timeModified": .timeModified,
+              "sizeInBytes": .sizeInBytes
+            },
+            # Then add in removal of initial file
+            {
+              "archiveStatus": "None",
+              "timeModified": .timeArchived,
+              "sizeInBytes": (-1.0 * .sizeInBytes)
+            },
+            # And then add in file to archive size
+            {
+              "archiveStatus": "Archived",
+              "timeModified": .timeArchived,
+              "sizeInBytes": .sizeInBytes
+            }
+          end
+        ]
+      ;
+      map(
+          select(.sizeInBytes == null | not)
+      ) |
+      map(
+          get_file_size_over_time
+      ) |
+      flatten |
+      group_by(
+         .archiveStatus
+      ) |
+      map(
+        sort_by(
+          .timeModified
+        ) |
+        group_by(
+            .timeModified
+        ) |
+        map(
+            {
+                "timeModified": map(.timeModified) | unique[0],
+                "sizeInBytes": map(.sizeInBytes) | add,
+                "archiveStatus": map(.archiveStatus) | unique[0]
+            }
+        ) |
+          accumulates(.["sizeInBytes"])
+      )
+    ' <<< "${files_obj}" \
+)"
+
+my_tempdir=$(mktemp -d)
+(
+cd "${my_tempdir}"
+
+echo "${archives_obj}" > "archive_logs.json"
+
+python - <<EOF
+
+import sys
+import json
+import csv
+import re
+import math
+from datetime import datetime, timedelta
+
+with open("archive_logs.json", 'r') as json_h:
+    all_data = json.load(json_h)
+
+all_timestamps = [
+    timepoint.get("timeModified")
+    for timepoint in all_data
+]
+
+all_archived_timepoints = [
+    timepoint
+    for timepoint in all_data
+    if timepoint.get("archiveStatus") == "Archived"
+]
+
+all_unarchived_timepoints = [
+    timepoint
+    for timepoint in all_data
+    if timepoint.get("archiveStatus") == "None"
+]
+
+rows_by_timestamp = []
+i = 0
+j = 0
+archive_cumsum = 0
+unarchive_cumsum = 0
+min_date = datetime.strptime(re.sub("\\.\d*Z$", "Z", all_timestamps[0]), "%Y-%m-%dT%H:%M:%SZ").strftime("%Y-%m-%dT%H:%M:%S")
+max_date = datetime.strptime(re.sub("\\.\d*Z$", "Z", all_timestamps[-1]), "%Y-%m-%dT%H:%M:%SZ")
+max_date += timedelta(days=1)
+max_date = max_date.strftime("%Y-%m-%dT%H:%M:%S")
+max_size = 0
+
+while True:
+    if i == len(all_archived_timepoints) and j == len(all_unarchived_timepoints):
+        break
+    elif i == len(all_archived_timepoints):
+        time_modified = all_unarchived_timepoints[j].get("timeModified")
+        unarchive_cumsum = all_unarchived_timepoints[j].get("sizeInBytes")
+        j += 1
+    elif j == len(all_unarchived_timepoints):
+        time_modified = all_archived_timepoints[i].get("timeModified")
+        archive_cumsum = all_archived_timepoints[i].get("sizeInBytes")
+        i += 1
+    elif all_archived_timepoints[i].get("timeModified") < all_unarchived_timepoints[j].get("timeModified"):
+        time_modified = all_archived_timepoints[i].get("timeModified")
+        archive_cumsum = all_archived_timepoints[i].get("sizeInBytes")
+        i += 1
+    elif all_archived_timepoints[i].get("timeModified") > all_unarchived_timepoints[j].get("timeModified"):
+        time_modified = all_unarchived_timepoints[j].get("timeModified")
+        unarchive_cumsum = all_unarchived_timepoints[j].get("sizeInBytes")
+        j += 1
+    else:
+        time_modified = all_archived_timepoints[i].get("timeModified")
+        unarchive_cumsum = all_unarchived_timepoints[j].get("sizeInBytes")
+        archive_cumsum = all_archived_timepoints[i].get("sizeInBytes")
+        i += 1
+        j += 1
+
+    if archive_cumsum > max_size:
+      max_size = archive_cumsum
+    if unarchive_cumsum > max_size:
+      max_size = unarchive_cumsum
+
+    rows_by_timestamp.append([
+        datetime.strptime(re.sub("\\.\d*Z$", "Z", time_modified), "%Y-%m-%dT%H:%M:%SZ").strftime("%Y-%m-%dT%H:%M:%S"),
+        archive_cumsum / math.pow(2, 30),
+        unarchive_cumsum / math.pow(2, 30)
+    ])
+
+# Write out data
+with open('plot.csv', 'w') as f:
+    writer = csv.writer(f)
+    writer.writerows(rows_by_timestamp)
+
+# Write out plot script
+with open('plot.script', 'w') as f_h:
+    f_h.write("set datafile separator ','\n")
+
+    f_h.write("set term png\n")
+    f_h.write("set output 'plot.png'\n")
+
+    f_h.write("set xdata time\n")
+    f_h.write("set timefmt '%Y-%m-%dT%H:%M:%S'\n")
+    f_h.write(f"set xrange ['{min_date}':'{max_date}']\n")
+    f_h.write("set format x '%y/%m/%d'\n")
+    f_h.write("set timefmt '%Y-%m-%dT%H:%M:%S'\n")
+
+    f_h.write("set xtics rotate by 45 right\n")
+    f_h.write("set title 'Size of ${gds_path//_/\\_} over time'\n")
+
+    f_h.write("set xlabel 'Date (%y/%m/%d)'\n")
+    f_h.write("set ylabel 'Directory Size (GB)'\n")
+
+    f_h.write(f"set yrange[0:{(1.1*max_size) / pow(2, 30)}]\n")
+
+    f_h.write("plot \\\\\n")
+    f_h.write("  'plot.csv' using 1:2 with lines title 'Archived data', \\\\\n")
+    f_h.write("  'plot.csv' using 1:3 with lines title 'Unarchived Data'\n")
+EOF
+
+gnuplot -c "plot.script"
+echo_stderr "Writing output plot"
+mv "plot.png" "${output_png_path}"
+
+)
+
+rm -rf "${my_tempdir}"

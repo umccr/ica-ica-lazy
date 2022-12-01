@@ -609,6 +609,164 @@ print_volumes(){
     '
 }
 
+get_recursive_list_of_files(){
+  local volume_name="$1"
+  local gds_path_attr="$2"
+  local ica_base_url="$3"
+  local ica_access_token="$4"
+  local data_params
+  local next_page_token
+  local response
+  local all_files_list_array
+
+  all_files_list_array=()
+
+  # Get folders first
+  next_page_token="null"
+  while :; do
+
+    # Get data params
+    data_params=(
+      "--data" "volume.name=${volume_name}" \
+      "--data" "recursive=true" \
+      "--data" "pageSize=${MAX_PAGE_SIZE}" \
+      "--data" "path=${gds_path_attr}*"
+    )
+
+    # Check next token
+    if [[ ! "${next_page_token}" == "null" ]]; then
+      data_params+=( "--data" "pageToken=${next_page_token}" )
+    fi
+
+    # Get files
+    response="$( \
+      curl \
+        --silent \
+        --location \
+        --fail \
+        --request GET \
+        --header "Authorization: Bearer ${ica_access_token}" \
+        --url "${ica_base_url}/v1/files" \
+        --get \
+        "${data_params[@]}" 2>/dev/null \
+    )"
+
+    # Assign token
+    next_page_token="$( \
+      jq --raw-output \
+        '
+          .nextPageToken
+        ' <<< "${response}" \
+    )"
+
+    all_files_list_array+=(
+      "$( \
+        jq \
+         --raw-output \
+         --compact-output \
+         '
+           .items
+         ' \
+         <<< "${response}" \
+      )"
+    )
+
+    # Check next page token
+    if [[ "${next_page_token}" == "null" ]]; then
+      break
+    fi
+
+  done
+
+  # Write out all files object
+  jq \
+    --raw-output \
+    --slurp \
+    '
+      flatten
+    ' \
+    <<< "${all_files_list_array[@]}"
+}
+
+get_recursive_list_of_folders(){
+  local volume_name="$1"
+  local gds_path_attr="$2"
+  local ica_base_url="$3"
+  local ica_access_token="$4"
+  local data_params
+  local next_page_token
+  local response
+  local all_folders_list_array
+
+  all_folders_list_array=()
+
+  # Get folders first
+  next_page_token="null"
+  while :; do
+
+    # Get data params
+    data_params=(
+      "--data" "volume.name=${volume_name}" \
+      "--data" "recursive=true" \
+      "--data" "pageSize=${MAX_PAGE_SIZE}" \
+      "--data" "path=${gds_path_attr}*"
+    )
+
+    # Check next token
+    if [[ ! "${next_page_token}" == "null" ]]; then
+      data_params+=( "--data" "pageToken=${next_page_token}" )
+    fi
+
+    # Get folders
+    response="$( \
+      curl \
+        --silent \
+        --location \
+        --fail \
+        --request GET \
+        --header "Authorization: Bearer ${ica_access_token}" \
+        --url "${ica_base_url}/v1/folders" \
+        --get \
+        "${data_params[@]}" 2>/dev/null \
+    )"
+
+    # Assign token
+    next_page_token="$( \
+      jq --raw-output \
+        '
+          .nextPageToken
+        ' <<< "${response}" \
+    )"
+
+    all_folders_list_array+=(
+      "$( \
+        jq \
+         --raw-output \
+         --compact-output \
+         '
+           .items
+         ' \
+         <<< "${response}" \
+      )"
+    )
+
+    # Check next page token
+    if [[ "${next_page_token}" == "null" ]]; then
+      break
+    fi
+
+  done
+
+  # Write out all folders object
+  jq \
+    --raw-output \
+    --slurp \
+    '
+      flatten
+    ' \
+    <<< "${all_folders_list_array[@]}"
+}
+
 print_files_and_subfolders(){
   : '
   list the files and the subfolders of the path that match
@@ -620,6 +778,7 @@ print_files_and_subfolders(){
   local ica_access_token="$4"
   local data_params
   local next_page_token
+  local response
   local all_files_list
   local all_folders_list
 

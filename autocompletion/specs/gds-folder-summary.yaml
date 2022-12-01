@@ -1,0 +1,27 @@
+---
+name: gds-folder-summary
+
+title: summarise folder disk usage
+
+options:
+  - name: gds-path
+    summary: |
+      The gds folder path
+    type: string
+    completion:
+      command_string: |-
+        gds-ls "${CURRENT_WORD}" 2>/dev/null
+  - name: output-report-path
+    summary: |
+      Path to output yaml report
+    type: string
+  - name: output-png-path
+    summary: |
+      Path to output png report
+    type: string
+  - name: append-report
+    summary: |
+      Append yaml to existing report output
+  - name: overwrite
+    summary: |
+      Overwrite report
