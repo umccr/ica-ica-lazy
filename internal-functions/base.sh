@@ -29,7 +29,8 @@ check_download_path(){
   local dest_path="$1"
 
   if [[ ! -d "$(dirname "${dest_path}")" ]]; then
-    echo_stderr "Error creating \"${dest_path}\". Output paths parent must exist"
+    echo_stderr "Error \"${dest_path}\". Output path's parent must exist"
+    return 1
   fi
 }
 
@@ -38,6 +39,7 @@ check_src_path(){
   local src_path="$1"
   if [[ ! -d "${src_path}" ]]; then
     echo_stderr "Error could not find \"${src_path}\". --src path must exist as a file or folder"
+    return 1
   fi
 }
 

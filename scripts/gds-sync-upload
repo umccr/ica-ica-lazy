@@ -172,7 +172,9 @@ check_token_expiry "${access_token}"
 
 # Only check source path if we're not writing to script
 if [[ -z "${write_script_path}" ]]; then
-  check_src_path "${src_path}"
+  if ! check_src_path "${src_path}"; then
+    exit 1
+  fi
 fi
 
 # Strip base url

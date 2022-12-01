@@ -173,7 +173,9 @@ fi
 # Check token expiry
 check_token_expiry "${access_token}"
 
-check_download_path "${download_path}"
+if ! check_download_path "${download_path}"; then
+  exit 1
+fi
 
 # Now run the aws s3 sync command through eval to quote the necessary arguments
 # Split volume and path
