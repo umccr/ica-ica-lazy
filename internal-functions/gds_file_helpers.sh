@@ -616,10 +616,10 @@ get_recursive_list_of_files(){
   local ica_access_token="$4"
   local data_params
   local next_page_token
-  local files_list
-  local all_files_list
+  local response
+  local all_files_list_array
 
-  all_files_list="[]"
+  all_files_list_array=()
 
   # Get folders first
   next_page_token="null"
@@ -659,24 +659,17 @@ get_recursive_list_of_files(){
         ' <<< "${response}" \
     )"
 
-    files_list="$( \
-      jq \
-       --raw-output \
-       --compact-output \
-       '
-         .items
-       ' \
-       <<< "${response}" \
-    )"
-
-    all_files_list="$( \
-      jq --raw-output \
-        --slurp \
-        '
-          flatten
-        ' \
-        <<< "${all_files_list}${files_list}" \
-    )"
+    all_files_list_array+=(
+      "$( \
+        jq \
+         --raw-output \
+         --compact-output \
+         '
+           .items
+         ' \
+         <<< "${response}" \
+      )"
+    )
 
     # Check next page token
     if [[ "${next_page_token}" == "null" ]]; then
@@ -688,7 +681,11 @@ get_recursive_list_of_files(){
   # Write out all files object
   jq \
     --raw-output \
-    <<< "${all_files_list}"
+    --slurp \
+    '
+      flatten
+    ' \
+    <<< "${all_files_list_array[@]}"
 }
 
 get_recursive_list_of_folders(){
@@ -699,10 +696,9 @@ get_recursive_list_of_folders(){
   local data_params
   local next_page_token
   local response
-  local folders_list
-  local all_folders_list
+  local all_folders_list_array
 
-  all_folders_list="[]"
+  all_folders_list_array=()
 
   # Get folders first
   next_page_token="null"
@@ -742,24 +738,17 @@ get_recursive_list_of_folders(){
         ' <<< "${response}" \
     )"
 
-    folders_list="$( \
-      jq \
-       --raw-output \
-       --compact-output \
-       '
-         .items
-       ' \
-       <<< "${response}" \
-    )"
-
-    all_folders_list="$( \
-      jq --raw-output \
-        --slurp \
-        '
-          flatten
-        ' \
-        <<< "${all_folders_list}${folders_list}" \
-    )"
+    all_folders_list_array+=(
+      "$( \
+        jq \
+         --raw-output \
+         --compact-output \
+         '
+           .items
+         ' \
+         <<< "${response}" \
+      )"
+    )
 
     # Check next page token
     if [[ "${next_page_token}" == "null" ]]; then
@@ -771,7 +760,11 @@ get_recursive_list_of_folders(){
   # Write out all folders object
   jq \
     --raw-output \
-    <<< "${all_folders_list}"
+    --slurp \
+    '
+      flatten
+    ' \
+    <<< "${all_folders_list_array[@]}"
 }
 
 print_files_and_subfolders(){
