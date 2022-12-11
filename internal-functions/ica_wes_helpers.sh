@@ -176,7 +176,7 @@ clean_history(){
   local history="$1"
 
   # This jq snippet can be experimented with at
-  # https://jqplay.org/s/pyGwEyblC7w
+  # https://jqplay.org/s/BbdkVIMoUql
   jq --raw-output \
   '
     # Functions
@@ -265,14 +265,17 @@ clean_history(){
       ) |
 
       # Collect the task completion time
+      # And the task status
       # Convert items to a dict with a single key
       # Which is the .eventDetails.additionalDetails[0].AbsolutePath attribute
       # The key has the following dict as a value
       # Key: "task_completion_time", Value Description: UTC time of task collection
+      # Key: "task_status", One of "Failed" or "Succeeded"
       map(
         # Set the additionalDetails dict as variable $additional_details
         .eventDetails.additionalDetails[0] as $additional_details |
-
+        # Set the event type (Failed or Succeeded) as $event_type
+        .eventType? as $event_type |
         # Set the absolutePath with the _collect suffix removed as $abs_path
         ($additional_details | .AbsolutePath | sub("_collect$"; "")) as $abs_path |
 
@@ -282,6 +285,7 @@ clean_history(){
         {
           ($abs_path): {
             "task_completion_time": .timestamp,
+            "task_status": $event_type,
           }
         }
       ) |
@@ -324,6 +328,7 @@ clean_history(){
             "task_name": .task_name,
             "task_launch_time": .task_launch_time,
             "task_completion_time": .task_completion_time?,
+            "task_status": .task_status?,
             "task_stdout": .task_stdout,
             "task_stderr": .task_stderr
           }
