@@ -176,7 +176,7 @@ clean_history(){
   local history="$1"
 
   # This jq snippet can be experimented with at
-  # https://jqplay.org/s/pyGwEyblC7w
+  # https://jqplay.org/s/BbdkVIMoUql
   jq --raw-output \
   '
     # Functions
