@@ -305,7 +305,7 @@ check_path_is_folder(){
     "${volume_name}" \
     "${gds_path_attr}" \
     "${ica_base_url}" \
-    "${ica_access_token}"; then
+    "${ica_access_token}" >/dev/null; then
     return 1
   fi
   return 0
