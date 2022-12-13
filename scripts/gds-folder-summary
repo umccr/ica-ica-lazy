@@ -177,6 +177,7 @@ if ! files_obj=$( \
       "${folder_path}" \
       "${base_url}" \
       "${access_token}" \
+      "id,sizeInBytes,format,archiveStatus,createdBy,timeModified"
   ); then
     echo_stderr "Could not get all files from '${gds_path}'"
     exit 1
@@ -189,6 +190,7 @@ if ! folders_obj=$( \
       "${folder_path}" \
       "${base_url}" \
       "${access_token}" \
+      "id"
   ); then
     echo_stderr "Could not get all folders from '${gds_path}'"
     exit 1

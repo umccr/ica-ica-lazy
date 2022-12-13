@@ -614,6 +614,7 @@ get_recursive_list_of_files(){
   local gds_path_attr="$2"
   local ica_base_url="$3"
   local ica_access_token="$4"
+  local output_attributes="${5-all}"
   local data_params
   local next_page_token
   local response
@@ -664,8 +665,22 @@ get_recursive_list_of_files(){
         jq \
          --raw-output \
          --compact-output \
+         --argjson output_attributes "[\"${output_attributes//,/\",\"}\"]" \
          '
-           .items
+           .items |
+           if $output_attributes[0] == "all" then
+             .
+           else
+             map(
+               to_entries |
+               map(
+                 select(
+                   .key | IN($output_attributes[])
+                 )
+               ) |
+               from_entries
+             )
+           end
          ' \
          <<< "${response}" \
       )"
@@ -693,6 +708,7 @@ get_recursive_list_of_folders(){
   local gds_path_attr="$2"
   local ica_base_url="$3"
   local ica_access_token="$4"
+  local output_attributes="${5-all}"
   local data_params
   local next_page_token
   local response
@@ -743,8 +759,22 @@ get_recursive_list_of_folders(){
         jq \
          --raw-output \
          --compact-output \
+         --argjson output_attributes "[\"${output_attributes//,/\",\"}\"]" \
          '
-           .items
+           .items |
+           if $output_attributes[0] == "all" then
+             .
+           else
+             map(
+               to_entries |
+               map(
+                 select(
+                   .key | IN($output_attributes[])
+                 )
+               ) |
+               from_entries
+             )
+           end
          ' \
          <<< "${response}" \
       )"
