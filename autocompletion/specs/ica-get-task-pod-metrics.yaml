@@ -1,0 +1,15 @@
+---
+name: ica-get-task-pod-metrics
+
+title: Get task pod metrics from ICA
+
+options:
+  - name: ica-task-run-id
+    summary: |
+      ICA task run id
+    type: string
+  - name: output-format
+    summary: |
+      The output format
+    type: string
+    enum: [ table, json ]
