@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+
+: '
+Given a task run id, get the cpu and memory usages of that task
+'
+
+
+print_help(){
+  echo "
+  Usage ica-get-task-pod-metrics (--ica-task-run-id <json-file>)
+                                 [--output-format table|json]
+
+  Description:
+    Given an ica task run id, collect the avg and maximum cpu and memory usages using the pod metrics file
+
+  Options:
+    --ica-task-run-id: The task run id to check
+    --output-format: table by default, specify json for json output
+
+  Requirements:
+    * curl
+    * jq
+    * python3
+    * sed (gnutls)
+
+  Environment variables:
+    * ICA_ACCESS_TOKEN
+    * ICA_BASE_URL
+  "
+}
+
+######
+# ARGS
+######
+
+# Get args from the command line
+task_run_id=""
+output_format="table"
+
+# Get args from command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --ica-task-run-id)
+      task_run_id="$2"
+      shift 1
+      ;;
+    --output-format)
+      output_format="$2"
+      shift 1
+      ;;
+    -h | --help)
+      print_help
+      exit 0
+      ;;
+  esac
+  shift 1
+done
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
+
+# Check ICA_BASE_URL env var is set
+if [[ -z "${ICA_BASE_URL-}" ]]; then
+  echo_stderr "Please set ICA_BASE_URL"
+  print_help
+  exit 1
+fi
+
+# Check we're in a project context
+if [[ -z "${ICA_ACCESS_TOKEN-}" ]]; then
+  echo_stderr "Please specify ICA_ACCESS_TOKEN"
+  print_help
+  exit 1
+fi
+
+# Get task pod metrics contents
+if ! pod_metrics_obj="$(get_trn_pod_metrics_file_contents \
+  "${task_run_id}" \
+  "${ICA_BASE_URL}" \
+  "${ICA_ACCESS_TOKEN}")"; then
+    echo_stderr "Couldn't get the pod metrics file"
+fi
+
+# Curate the pod metrics objects
+curated_pod_metrics_obj="$( \
+  curate_pod_metrics_obj \
+    "${pod_metrics_obj}"
+)"
+
+if [[ "$(jq --raw-output 'length' <<< "${curated_pod_metrics_obj}")" == "0" ]]; then
+  echo_stderr "Task '${task_run_id}' didn't run for long enough to capture task metrics"
+  exit 1
+fi
+
+if [[ "${output_format}" == "json" ]]; then
+  usage_json_output "${curated_pod_metrics_obj}"
+else
+  usage_table_output "${curated_pod_metrics_obj}"
+fi
