@@ -1,0 +1,46 @@
+#compdef ica-get-task-pod-metrics
+
+# Generated with perl module App::Spec v0.000
+
+_ica-get-task-pod-metrics() {
+    local program=ica-get-task-pod-metrics
+    typeset -A opt_args
+    local curcontext="$curcontext" state line context
+
+
+        # ---- Command: 
+        _arguments -s  \
+            '--ica-task-run-id[ICA task run id
+]:ica-task-run-id' \
+            '--output-format[The output format
+]:output-format:("table" "json")' \
+            '--help[Show command help]' \
+            '-h[Show command help]' \
+            && ret=0
+
+
+
+}
+
+
+__ica-get-task-pod-metrics_dynamic_comp() {
+    local argname="$1"
+    local arg="$2"
+    local comp="arg:$argname:(("
+    local line
+    while read -r line; do
+        local name="$line"
+        local desc="$line"
+        name="${name%$'\t'*}"
+        desc="${desc/*$'\t'}"
+        comp="$comp$name"
+        if [[ -n "$desc" && "$name" != "$desc" ]]; then
+            comp="$comp\\:"'"'"$desc"'"'
+        fi
+        comp="$comp "
+    done <<< "$arg"
+
+    comp="$comp))"
+    _alternative "$comp"
+}
+
