@@ -102,7 +102,7 @@ curated_pod_metrics_obj="$( \
 )"
 
 if [[ "$(jq --raw-output 'length' <<< "${curated_pod_metrics_obj}")" == "0" ]]; then
-  echo_stderr "Task '${task_run_id}' didn't run for long enough to capture task metrics"
+  echo_stderr "Task '${task_run_id}' didn't run for long enough to capture task metrics or the pod metrics file has been deleted"
   exit 1
 fi
 
