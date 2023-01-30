@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+
+: '
+Plot metrics of multiple tasks
+'
+
+print_help(){
+  echo "
+  Usage ica-plot-tasks-pod-metrics (--ica-tasks-list <comma_seperated_task_list>)
+                                   (--output-prefix <output_prefix>)
+                                   (--title-prefix <title_prefix>)
+
+  Description:
+    Given a list of tasks, plot the cpu and memory max distrubtions
+
+  Options:
+    --ica-tasks-list: The task run ids to list
+    --output-prefix: Output prefix, files will be output as <output_prefix>.mem_usage.png  <output_prefix>.cpu_usage.png
+    --title-prefix: Title prefix, plot titles will have this followed by 'Mem Usage', 'CPU Usage'.
+  Requirements:
+    * curl
+    * jq
+    * python3
+    * sed (gnutls)
+    * gnuplot
+    * ica-get-task-pod-metrics (part of ica-ica-lazy package)
+
+  Environment variables:
+    * ICA_ACCESS_TOKEN
+    * ICA_BASE_URL
+  "
+}
+
+######
+# ARGS
+######
+
+# Get args from the command line
+declare ICA_TASKS_RUNS_LIST_ARRAY
+METRICS_ARRAY=( "mem" "cpu" )
+ica_tasks_runs_list_str=""
+output_prefix=""
+title_prefix=""
+
+# Get args from command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --ica-tasks-list)
+      ica_tasks_runs_list_str="$2"
+      shift 1
+      ;;
+    --output-prefix)
+      output_prefix="$2"
+      shift 1
+      ;;
+    --title-prefix)
+      title_prefix="$2"
+      shift 1
+      ;;
+    -h | --help)
+      print_help
+      exit 0
+      ;;
+  esac
+  shift 1
+done
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
+## Get task list as array
+readarray -t -d"," ICA_TASKS_RUNS_LIST_ARRAY <<< "${ica_tasks_runs_list_str}"
+
+## Iterate through task array, collect pod metrics from each item
+aggregate_metrics_json_str="$( \
+  for ica_task_run_id in "${ICA_TASKS_RUNS_LIST_ARRAY[@]}"; do
+    ica-get-task-pod-metrics \
+      --ica-task-run-id "${ica_task_run_id}" \
+      --output-format "json"
+  done | \
+  jq --slurp
+)"
+
+for metric in "${METRICS_ARRAY[@]}"; do
+  if [[ "${metric}" == "mem" ]]; then
+    metric_key="max_mem"
+    plot_title="${title_prefix} Max Mem Usage"
+    output_file="${output_prefix}.mem.png"
+    xlabel="Memory (GB)"
+  elif [[ "${metric}" == "cpu" ]]; then
+    metric_key="max_cpu"
+    plot_title="${title_prefix} Max CPU Usage"
+    output_file="${output_prefix}.cpu.png"
+    xlabel="CPU"
+  fi
+
+  data_file="$(mktemp --suffix ".txt")"
+  gnuplot_script_file="$(mktemp --suffix ".bat")"
+  jq --raw-output \
+    --arg "metric_key" "${metric_key}" \
+    '
+      map(.[$metric_key]) |
+      .[]
+    ' <<< "${aggregate_metrics_json_str}" \
+  > "${data_file}"
+
+
+  ## Create output plot
+  ( \
+  cat <<- EOF
+clear
+reset
+set key off
+set border 3
+
+# Add a vertical dotted line at x=0 to show centre (mean) of distribution.
+set yzeroaxis
+
+# Each bar is half the (visual) width of its x-range.
+set boxwidth 0.05 absolute
+set style fill solid 1.0 noborder
+
+set term png
+set output "${output_file}"
+
+bin_width = 0.1;
+
+bin_number(x) = floor(x/bin_width)
+
+rounded(x) = bin_width * ( bin_number(x) + 0.5 )
+
+# Set labels
+set xlabel "${xlabel}"
+set ylabel ""
+unset ytics
+set title "${plot_title}"
+
+plot "${data_file}" using (rounded(\$1)):(1) smooth frequency with boxes
+EOF
+  ) > "${gnuplot_script_file}"
+  # Plot script
+  gnuplot -c "${gnuplot_script_file}"
+  # Delete data and script
+  # rm "${data_file}" "${gnuplot_script_file}"
+done
+
