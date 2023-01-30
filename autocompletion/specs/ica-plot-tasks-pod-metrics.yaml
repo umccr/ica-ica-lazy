@@ -1,0 +1,18 @@
+---
+name: ica-plot-tasks-pod-metrics
+
+title: Plot ICA tasks pod metrics
+
+options:
+  - name: ica-tasks-list
+    summary: |
+      ICA tasks run id
+    type: string
+  - name: output-prefix
+    summary: |
+      The output prefix
+    type: string
+  - name: title-prefix
+    summary: |
+      The title prefix
+    type: string
