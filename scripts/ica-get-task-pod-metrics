@@ -7,7 +7,7 @@ Given a task run id, get the cpu and memory usages of that task
 
 print_help(){
   echo "
-  Usage ica-get-task-pod-metrics (--ica-task-run-id <json-file>)
+  Usage ica-get-task-pod-metrics (--ica-task-run-id <task-run-id>)
                                  [--output-format table|json]
 
   Description:
