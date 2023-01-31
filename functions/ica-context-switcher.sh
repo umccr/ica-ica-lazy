@@ -16,8 +16,10 @@ ica-context-switcher(){
   #########
   local tokens_file_path
   local ica_access_token
-  local default_scope="read-only"
+  local SCOPES_ARRAY
+
   tokens_file_path="$HOME/.ica-ica-lazy/tokens/tokens.json"
+  SCOPES_ARRAY=( "read-only" "admin" )
 
   ###########
   # FUNCTIONS
@@ -78,9 +80,33 @@ ica-context-switcher(){
   "
   }
 
+  _check_project_in_tokens_file_path(){
+    : '
+    Check that the project exists in the token file path
+    '
+
+    # Func inputs
+    local project_name="$1"
+    local tokens_file_path="$2"
+
+    return "$( \
+      jq \
+        --raw-output \
+        --arg project_name "${project_name}" \
+        '
+          keys as $keys |
+          if ( $project_name | IN($keys[]) ) then
+            "0"
+          else
+            "1"
+          end
+        ' < "${tokens_file_path}"
+    )"
+  }
+
   _get_access_token(){
     : '
-    Check the level of the scope
+    Return the JWT access token
     '
 
     # Func inputs
@@ -88,18 +114,14 @@ ica-context-switcher(){
     local scope="$2"
     local tokens_file_path="$3"
 
-    local in_json
-    local project_access_token
+    jq \
+      --raw-output \
+      --arg project_name "${project_name}" \
+      --arg scope "${scope}" \
+      '
+        .[$project_name][$scope]
+      ' < "${tokens_file_path}"
 
-    in_json="$(cat "${tokens_file_path}")"
-
-    project_access_token="$(jq \
-                              --raw-output \
-                              --arg project_name "${project_name}" \
-                              --arg scope "${scope}" \
-                            '.[$project_name][$scope]' <<< "${in_json}")"
-
-    echo "${project_access_token}"
   }
 
   # Get args from command line
@@ -128,15 +150,6 @@ ica-context-switcher(){
     return 1
   fi
 
-  if [[ -z "${scope-}" ]]; then
-    # Set scope to 'read-only'
-    scope="${default_scope}"
-  elif [[ "${scope}" != "admin" && "${scope}" != "read-only" ]]; then
-    _echo_stderr "--scope must be one of read-only or admin"
-    _print_help
-    return 1
-  fi
-
   # Check available binaries exist
   if ! _check_binaries; then
     _echo_stderr "Please make sure binaries curl, jq and python3 are all available on your PATH variable"
@@ -151,13 +164,39 @@ ica-context-switcher(){
     return 1
   fi
 
-  # Check file exists
+  # Check tokens path file exists
   if [[ ! -f "${tokens_file_path}" ]]; then
     _echo_stderr "Tokens file path \"${tokens_file_path}\" does not exist, please run \"ica-add-access-token\" first"
   fi
 
-  # Read token file
-  ica_access_token="$(_get_access_token "${project_name}" "${scope}" "${tokens_file_path}")"
+  # Check project exists in tokens path
+  if ! _check_project_in_tokens_file_path "${project_name}" "${tokens_file_path}"; then
+    _echo_stderr "Project '${project_name}' does not exist in tokens file path"
+  fi
+
+  # Check scope exists
+  if [[ -z "${scope-}" ]]; then
+    # Check available scopes (first checking default scope) then checking
+    for scope in "${SCOPES_ARRAY[@]}"; do
+      ica_access_token="$( \
+        _get_access_token \
+          "${project_name}" \
+          "${scope}" \
+          "${tokens_file_path}" \
+      )"
+      if [[ -n "${ica_access_token}" && "${ica_access_token}" != "null" ]]; then
+        _echo_stderr "Scope not specified and token for scope '${scope}' is defined so using this token"
+        break
+      fi
+    done
+  elif [[ "${scope}" != "admin" && "${scope}" != "read-only" ]]; then
+    _echo_stderr "--scope must be one of read-only or admin"
+    _print_help
+    return 1
+  else
+    # Read token file anduse scope as specified in cli
+    ica_access_token="$(_get_access_token "${project_name}" "${scope}" "${tokens_file_path}")"
+  fi
 
   if [[ -z "${ica_access_token}" || "${ica_access_token}" == "null" ]]; then
     _echo_stderr "Could not get token for project \"${project_name}\", scope level \"${scope}\". Please first run \"ica-add-access-token\" --project-name \"${project_name}\" --scope \"${scope}\""
