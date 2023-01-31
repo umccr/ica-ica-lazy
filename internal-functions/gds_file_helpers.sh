@@ -934,7 +934,7 @@ print_files_and_subfolders(){
     )"
 
     # Check next page token
-    if [[ "${next_page_token}" == "null" ]]; then
+    if [[ -z "${next_page_token}" || "${next_page_token}" == "null" ]]; then
       break
     fi
 
@@ -954,7 +954,7 @@ print_files_and_subfolders(){
 
   # Write out files and folders but sort on print
   if [[ -z "${files}" && -z "${folders}" ]]; then
-    echo ""
+    return 1
   elif [[ -z "${files}" ]]; then
     echo "${folders}" | sort -f
   elif [[ -z "${folders}" ]]; then

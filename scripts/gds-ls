@@ -91,23 +91,25 @@ fi
 # Get the volume
 volume_name="$(get_volume_name "${gds_path}")"
 
-if [[ "${volume_name}" == "" ]]; then
-  print_volumes "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"
-  exit
-fi
-
-# Check volume exists - if not print all volumes
-if ! check_volume "${volume_name}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"; then
-  print_volumes "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"
-  exit
-fi
-
 # Get the path
 gds_path_attr="$(get_path "${gds_path}")"
 
-# Print from
-if ! check_path_is_folder "${volume_name}" "${gds_path_attr}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"; then
-   print_files_and_subfolders "${volume_name}" "${gds_path_attr%/}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"
-else
-   print_files_and_subfolders "${volume_name}" "${gds_path_attr}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"
+# Get the parent folder
+gds_parent_path="$(dirname "${gds_path_attr}")/"
+if [[ "${gds_parent_path}" == "//" ]]; then
+  gds_parent_path="/"
 fi
+
+if [[ -z "${volume_name}" || -z "${gds_path_attr}" ]]; then
+  print_volumes "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"
+  exit
+fi
+
+
+
+# Print from
+# Try print files and subfolders
+print_files_and_subfolders "${volume_name}" "${gds_path_attr}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}" || \
+print_files_and_subfolders "${volume_name}" "${gds_path_attr%/}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}" || \
+print_files_and_subfolders "${volume_name}" "${gds_parent_path}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}" || \
+print_volumes "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"
