@@ -168,8 +168,7 @@ name="${name//\./\\.}"
 name="^${name}\$"
 
 if ! check_path_is_folder "${volume_name}" "${folder_path}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"; then
-  echo_stderr "Could not find directory '${gds_path}'"
-  exit 1
+  echo_stderr "Warning, could not access directory '${gds_path}'"
 fi
 
 gds_search "${volume_name}" "${folder_path}" "0" "${mindepth}" "${maxdepth}" "${type}" "${name}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"
