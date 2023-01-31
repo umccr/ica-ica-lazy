@@ -40,7 +40,7 @@ get_path(){
   local gds_path="$1"
 
   # Function outputs
-  python3 -c "from urllib.parse import urlparse; from pathlib import Path; print(str(Path(urlparse(\"${gds_path}\").path)).rstrip(\"/\") + \"/\")"
+  python3 -c "from urllib.parse import urlparse; print(str(urlparse(\"${gds_path}\").path).rstrip(\"/\") + \"/\")"
 }
 
 
