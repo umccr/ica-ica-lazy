@@ -1,0 +1,260 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+: '
+Run a TES task to compress fastq files to ORA files through dragen v4
+
+Given a directory, compress all of the fastq files and upload as ORA files
+'
+
+print_help(){
+  echo "
+Usage: gds-tar (--input-path gds://volume-name/path/to/fastqs/)
+               (--output-file gds://volume-name/path/to/fastqs-archived.tar.gz/)
+               [--compression-level <compression_level>]
+
+Options:
+  --input-path            Required, path to input directory you wish to compress
+  --output-file           Required, path to output tar archive
+  --compression-level     Optional, levle of gzip compression (1-9), (default 5)
+  --help                  Optional, print this help message and exit
+
+Requirements:
+  * jq         (v1.5+)
+  * python3 (v3.4+)
+  * curl
+
+Environment:
+  * ICA_BASE_URL
+  * ICA_ACCESS_TOKEN  (make sure you have administration permissions for this project context)
+  "
+}
+
+binaries_check(){
+  : '
+  Check each of the required binaries are available
+  '
+  if ! (type jq python3 curl 1>/dev/null); then
+    return 1
+  fi
+}
+
+# Globals
+TEMPLATE_NAME="gds-tar-task-run.json"
+
+# Get args
+input_path=""
+output_gds_path=""
+template_path="${ICA_ICA_LAZY_HOME-}/templates/${TEMPLATE_NAME}"
+compression_level="5"
+
+# Get args from command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --input-path)
+      input_path="$2"
+      shift 1
+      ;;
+    --output-file)
+      output_gds_path="$2"
+      shift 1
+      ;;
+    --compression-level)
+      compression_level="$2"
+      shift 1
+      ;;
+    -h | --help)
+      print_help
+      exit 0
+      ;;
+  esac
+  shift 1
+done
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
+# Ensure input / output params are set
+if [[ -z "${input_path}" ]]; then
+  echo_stderr "Please make sure --input-path parameter is set"
+  exit 1
+fi
+if [[ -z "${output_gds_path}" ]]; then
+  echo_stderr "Please make sure --output-file parameter is set"
+  exit 1
+fi
+
+# Start
+if [[ -z "${ICA_BASE_URL-}" ]]; then
+    echo "Error: Need to set var \"ICA_BASE_URL\"" 1>&2
+    exit 1
+fi
+
+# Check access token
+if [[ -z "${ICA_ACCESS_TOKEN-}" ]]; then
+    echo "Error: Need to set var \"ICA_ACCESS_TOKEN\"" 1>&2
+    exit 1
+fi
+
+# Get the input volume name / folder path exists
+input_volume_name="$(get_volume_from_gds_path "${input_path}")"
+input_folder_path="$(get_folder_path_from_gds_path "${input_path}")"
+input_folder_name="$(get_folder_name_from_folder_path "${input_folder_path}")"
+
+if ! check_path_is_folder "${input_volume_name}" "${input_folder_path}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"; then
+  echo_stderr "Could not confirm ${input_path} was a valid gds path"
+  exit 1
+fi
+
+# Check --compression-level is within range
+if [[ ! "${compression_level}" =~ ^[1-9]+$ ]]; then
+  echo_stderr "--compression-level should be a number between 1 and 9"
+  exit 1
+fi
+
+# Get the dest stuff
+output_volume_name="$(get_volume_from_gds_path "${output_gds_path}")"
+output_folder_path="$(get_folder_path_from_gds_path "$(dirname "${output_gds_path}")")"
+output_folder_parent="$(get_folder_parent_from_folder_path "${output_folder_path}")"
+output_folder_name="$(get_folder_name_from_folder_path "${output_folder_path}")"
+
+# Create the destination folder in gds
+if ! output_folder_id="$(get_folder_id "${output_volume_name}" "${output_folder_path}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}")"; then
+  echo_stderr "Creating the gds folder \"${output_gds_path}\""
+  output_folder_id="$(create_gds_folder "${output_volume_name}" "${output_folder_parent}" "${output_folder_name}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}")"
+  # Now re-check folder was created successfully
+  if [[ -z "${output_folder_id}" || "${output_folder_id}" == "null"  ]]; then
+    echo_stderr "Creation of folder \"gds://${output_volume_name}${output_folder_path}\" failed"
+    exit 1
+  fi
+fi
+
+# Get file list object as a gds file list in the source
+echo_stderr "Collecting presigned urls from source path"
+file_list_obj="$(get_gds_file_list_as_digestible "${input_volume_name}" "${input_folder_path}" "true" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}")"
+
+# Reshape json and write out
+temp_manifest_path="$("$(get_mktemp_binary)" -t "manifest.XXX.json")"
+jq --raw-output --slurp \
+  --arg folder_name "${input_folder_name}" \
+  '
+    map(
+      select(.file_size != 0)
+    ) |
+    map(
+      {
+        url: .presigned_url,
+        size: .file_size,
+        path: "\($folder_name)/\(.output_path)"
+      }
+    ) |
+    flatten
+  ' <<< "${file_list_obj}" > "${temp_manifest_path}"
+
+# Upload manifest
+echo_stderr "Uploading file ${temp_manifest_path} to gds://${output_volume_name}${output_folder_path}"
+manifest_file_id="$(upload_gds_file "${output_volume_name}" "${output_folder_path%/}" "${temp_manifest_path}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}")"
+
+# Get presigned url
+iter_counter=0
+while :; do
+  if [[ "${iter_counter}" -gt 5 ]]; then
+    echo_stderr "Could not get manifest presigned url after 30 seconds, exiting"
+    exit
+  fi
+  # Get the manifest presigned url
+  if ! manifest_presigned_url="$(get_presigned_url_from_file_id "${manifest_file_id}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}")"; then
+    echo_stderr "Could not get manifest presigned url, sleeping five seconds and then trying again"
+    sleep 5
+    # Increment counter then sleep
+    iter_counter="$((iter_counter + 1))"
+    continue
+  fi
+
+  # Check manifest exists
+  if [[ -z "${manifest_presigned_url}" || "${manifest_presigned_url}" == "null" ]]; then
+    echo_stderr "Could not get manifest presigned url, sleeping five seconds and then trying again"
+    sleep 5
+    # Increment counter then sleep
+    iter_counter="$((iter_counter + 1))"
+    continue
+  else
+    break
+  fi
+
+done
+
+echo_stderr "Uploaded manifest file of presigned urls - deleting local tmp copy"
+rm "${temp_manifest_path}"
+
+# Get the json aws creds with the curl PATCH command
+echo_stderr "Getting AWS credentials of output folder"
+output_aws_credentials="$(get_aws_access_creds_from_folder_id "${output_folder_id}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}")"
+
+# Creds to be exported
+output_aws_access_key_id="$(get_access_key_id_from_credentials "${output_aws_credentials}")"
+output_aws_secret_access_key="$(get_secret_access_key_from_credentials "${output_aws_credentials}")"
+output_aws_session_token="$(get_session_token_from_credentials "${output_aws_credentials}")"
+output_aws_region="$(get_region_from_credentials "${output_aws_credentials}")"
+
+# Components of positional parameter 1
+output_aws_bucket_name="$(get_bucket_name_from_credentials "${output_aws_credentials}")"
+output_aws_key_prefix="$(get_key_prefix_from_credentials "${output_aws_credentials}")"
+
+# Create temp file with template
+temp_test_compression_path="$("$(get_mktemp_binary)" -t "tes-tar.XXX.json")"
+cp "${template_path}" "${temp_test_compression_path}"
+
+# Update template TES json
+echo_stderr "Populating TES task template"
+"$(get_sed_binary)" -i "s#__GDS_MANIFEST_JSON_URL__#${manifest_presigned_url//&/\\&}#" "${temp_test_compression_path}"
+"$(get_sed_binary)" -i "s%__AWS_BUCKET_NAME__%${output_aws_bucket_name}%" "${temp_test_compression_path}"
+"$(get_sed_binary)" -i "s%__AWS_KEY_PREFIX__%${output_aws_key_prefix}%" "${temp_test_compression_path}"
+"$(get_sed_binary)" -i "s%__AWS_ACCESS_KEY_ID__%${output_aws_access_key_id}%" "${temp_test_compression_path}"
+"$(get_sed_binary)" -i "s%__AWS_SECRET_ACCESS_KEY__%${output_aws_secret_access_key}%" "${temp_test_compression_path}"
+"$(get_sed_binary)" -i "s%__AWS_SESSION_TOKEN__%${output_aws_session_token}%" "${temp_test_compression_path}"
+"$(get_sed_binary)" -i "s%__AWS_REGION__%${output_aws_region}%" "${temp_test_compression_path}"
+"$(get_sed_binary)" -i "s%__GDS_SYSTEM_FILES_PATH__%gds://${output_volume_name}${output_folder_path%/}/tar_logs%" "${temp_test_compression_path}"
+"$(get_sed_binary)" -i "s%__INPUT_DIRECTORY_NAME__%${input_folder_name}%g" "${temp_test_compression_path}"
+"$(get_sed_binary)" -i "s%__OUTPUT_FILE_NAME__%$(basename "${output_gds_path}")%g" "${temp_test_compression_path}"
+"$(get_sed_binary)" -i "s%__GZIP_COMPRESSION_LEVEL__%${compression_level}%" "${temp_test_compression_path}"
+
+
+# Launch the tes task
+echo_stderr "Launching TES task"
+tes_task_id="$( \
+  curl \
+    --silent \
+    --fail \
+    --location \
+    --request POST \
+    --header 'Accept: application/json' \
+    --header 'Content-Type: application/*+json' \
+    --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+    --data "@${temp_test_compression_path}" \
+    --url "${ICA_BASE_URL}/v1/tasks/runs" | \
+  jq --raw-output \
+    '
+      .id
+    ' \
+)"
+
+echo_stderr "Launching gds-tar with task run ${tes_task_id}"
+echo_stderr "Once the tar task is complete you may remove the log directory \"gds://${output_volume_name}${output_folder_path}/tar_logs\""
+echo_stderr "This command will NOT delete the input folder, you may wish to do this after this command has completed."
+
+rm "${temp_test_compression_path}"
