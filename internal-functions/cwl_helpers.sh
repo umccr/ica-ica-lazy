@@ -168,14 +168,14 @@ check_input_paths_and_locations(){
        class_type="$(get_class_type "${input_key_rstripped}" "${flattened_inputs}")"
 
        # If a directory, make sure it exists
-       if [[ "${class_type}" == "gds_directory" ]]; then
+       if [[ "${class_type}" == "gds_directory" && "${input_value}" =~ ^gds://.*  ]]; then
          echo_stderr "Input '${input_key}' is a gds directory at '${input_value}', checking it's present."
          if ! check_folder_exists "${input_key_rstripped}" "${input_value}" "${ica_access_token}" "${ica_base_url}"; then
            echo_stderr "Error! Could not find gds directory '${input_value}' for input '${input_key_rstripped}'"
            all_there=1
          fi
        # If a file, make sure it exists
-       elif [[ "${class_type}" == "gds_file" ]]; then
+       elif [[ "${class_type}" == "gds_file" && "${input_value}" =~ ^gds://.* ]]; then
         echo_stderr "Input '${input_key}' is a gds file at '${input_value}' checking it's present."
          if ! check_file_exists "${input_key_rstripped}" "${input_value}" "${ica_access_token}" "${ica_base_url}"; then
            echo_stderr "Error! Could not find gds file '${input_value}' for input '${input_key_rstripped}'"
