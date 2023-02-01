@@ -1,0 +1,38 @@
+{
+  "name": "gds-tar",
+  "execution": {
+    "image": {
+      "name": "ghcr.io/umccr/aws-cli-with-extras",
+      "tag": "2.9.19"
+    },
+    "command": "bash",
+    "args": [
+      "-c",
+      "GZIP=-__GZIP_COMPRESSION_LEVEL__ tar --directory /mount/mount/media/inputs/ --create --use-compress-program gzip --file __OUTPUT_FILE_NAME__ __INPUT_DIRECTORY_NAME__; AWS_REGION=\"__AWS_REGION__\" AWS_ACCESS_KEY_ID=\"${SECURE_AWS_ACCESS_KEY_ID}\" AWS_SECRET_ACCESS_KEY=\"${SECURE_AWS_SECRET_ACCESS_KEY}\" AWS_SESSION_TOKEN=\"${SECURE_AWS_SESSION_TOKEN}\" aws s3 cp \"__OUTPUT_FILE_NAME__\" \"s3://__AWS_BUCKET_NAME__/__AWS_KEY_PREFIX__\";"
+    ],
+    "inputs": [
+      {
+        "mode": "download",
+        "type": "manifest",
+        "url": "__GDS_MANIFEST_JSON_URL__",
+        "path": "/mount/mount/media/inputs/"
+      }
+    ],
+    "outputs": [],
+    "systemFiles": {
+      "url": "__GDS_SYSTEM_FILES_PATH__"
+    },
+    "environment": {
+      "variables": {
+        "SECURE_AWS_ACCESS_KEY_ID": "__AWS_ACCESS_KEY_ID__",
+        "SECURE_AWS_SECRET_ACCESS_KEY": "__AWS_SECRET_ACCESS_KEY__",
+        "SECURE_AWS_SESSION_TOKEN": "__AWS_SESSION_TOKEN__"
+      },
+      "resources": {
+        "type": "standard",
+        "size": "small"
+      }
+    },
+    "retryLimit": 0
+  }
+}
