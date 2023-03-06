@@ -51,7 +51,7 @@ flatten_inputs(){
   '
   jq --raw-output '[
          . as $in |
-         (paths(scalars), paths((. | length == 0)?)) |
+         (paths(scalars), paths((. | length == 0)?), paths((. == false))) |
          join(".") as $key |
          $key + "=" + ($in | getpath($key | split(".") | map((. | tonumber)? // .)) | tostring)
        ] |
