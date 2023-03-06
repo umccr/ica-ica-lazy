@@ -8,3 +8,9 @@ options:
     summary: |
       ICA workflow run id
     type: string
+  - name: include-hardware
+    summary: Include hardware
+  - name: include-docker-image
+    summary: include docker image
+  - name: include-args
+    summary: include args
