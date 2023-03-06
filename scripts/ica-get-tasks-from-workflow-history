@@ -15,6 +15,9 @@ print_help(){
 
   Options:
     -w / --ica-workflow-run-id: The ICA workflow run ID you would like to find all the tasks from
+    -r / --include-hardware: Include the hardware used in a step
+    -d / --include-docker-image: Include the docker image used in a step
+    -a / --include-args: Include arguments used in a step
 
   Requirements:
     * curl
@@ -28,6 +31,9 @@ print_help(){
 
 # Get args from the command line
 ica_workflow_run_id=""
+include_hardware="false"
+include_docker_image="false"
+include_args="false"
 
 # Get args from command line
 while [ $# -gt 0 ]; do
@@ -35,6 +41,15 @@ while [ $# -gt 0 ]; do
     -w | --ica-workflow-run-id)
       ica_workflow_run_id="$2"
       shift 1
+      ;;
+    -r | --include-hardware)
+      include_hardware="true"
+      ;;
+    -d | --include-docker-image)
+      include_docker_image="true"
+      ;;
+    -a | --include-args)
+      include_args="true"
       ;;
     -h | --help)
       print_help
@@ -98,4 +113,98 @@ workflow_run_history="$( \
 )"
 
 # Perform 'magical' jq
-clean_history "${workflow_run_history}"
+history_json_str="$(clean_history "${workflow_run_history}")"
+
+# Do we need to continue, or just print out the history
+if [[ "${include_hardware}" == "false" && "${include_docker_image}" == "false" && "${include_args}" == "false" ]]; then
+  echo "${history_json_str}"
+  exit 0
+fi
+
+
+get_includes_from_task_id(){
+  : '
+  Get args, docker image or hardware from task id
+  '
+  local task_id="$1"
+  local include_args="$2"
+  local include_docker_image="$3"
+  local include_hardware="$4"
+
+  curl \
+      --fail \
+      --silent \
+      --location \
+      --show-error \
+      --request GET \
+      --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+      "${ICA_BASE_URL}/v1/tasks/runs/${task_id}" | \
+    jq --raw-output \
+      --argjson "include_args" "${include_args}" \
+      --argjson "include_docker_image" "${include_docker_image}" \
+      --argjson "include_hardware" "${include_hardware}" \
+      '
+        . as $task_object |
+        {
+          "task_id": .id
+        } |
+        (
+         if $include_args then
+          . += {
+            "args": ($task_object | .execution.args | tojson)
+          } else
+          .
+         end
+        ) |
+        (
+         if $include_docker_image then
+          . += {
+            "docker_image": ($task_object | .execution.image.name)
+          } else
+          .
+         end
+        ) |
+        (
+          if $include_hardware then
+           . += {
+             "hardware": (
+               $task_object | .execution.environment.resources |
+               {
+                 "type": .type,
+                 "size": .size,
+                 "tier": .tier
+               } |
+               tojson
+             )
+           } else
+           .
+          end
+        )
+      '
+}
+
+
+readarray -t tasks_in_history_array <<< "$( \
+    jq --raw-output --compact-output \
+      '
+        map(.task_id) |
+        .[]
+      ' <<< "${history_json_str}" \
+  )"
+
+(
+  for task_id in "${tasks_in_history_array[@]}"; do
+    get_includes_from_task_id \
+      "${task_id}" \
+      "${include_args}" \
+      "${include_docker_image}" \
+      "${include_hardware}"
+  done
+) | \
+jq --slurp --raw-output \
+  --argjson history_json_obj "${history_json_str}" \
+  '
+    INDEX($history_json_obj[]; .task_id) as $history_json_obj_index |
+    JOIN($history_json_obj_index; .[]; .task_id; add)
+  '
+
