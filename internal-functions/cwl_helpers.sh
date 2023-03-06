@@ -15,7 +15,7 @@ get_inputs_from_cwl_definition(){
 
   jq --raw-output '(
          if (.["$graph"] | length) !=0 then
-             .["$graph"] | select(.id == ("#main"))
+             .["$graph"] | map(select(.id == ("#main"))) | .[]
          else
              .
          end) |
@@ -208,6 +208,8 @@ check_input_value(){
   local ica_workflow_inputs="$2"
   local ica_base_url="$3"
   local ica_access_token="$4"
+
+  local flattened_inputs
 
   # Check if inputs are null
   if [[ -z "${inputs}" || "${inputs}" == "null" ]]; then
