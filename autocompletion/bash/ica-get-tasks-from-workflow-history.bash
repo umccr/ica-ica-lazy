@@ -17,11 +17,17 @@ _ica-get-tasks-from-workflow-history() {
 
     FLAGS=('--help' 'Show command help' '-h' 'Show command help')
     OPTIONS=('--ica-workflow-run-id' 'ICA workflow run id
-')
+' '--include-hardware' 'Include hardware' '--include-docker-image' 'include docker image' '--include-args' 'include args')
     __ica-get-tasks-from-workflow-history_handle_options_flags
 
     case ${MYWORDS[$INDEX-1]} in
       --ica-workflow-run-id)
+      ;;
+      --include-hardware)
+      ;;
+      --include-docker-image)
+      ;;
+      --include-args)
       ;;
 
     esac
