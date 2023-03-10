@@ -206,5 +206,28 @@ jq --slurp --raw-output \
   '
     INDEX($history_json_obj[]; .task_id) as $history_json_obj_index |
     JOIN($history_json_obj_index; .[]; .task_id; add)
+  ' | \
+jq --slurp --raw-output \
+  --argjson history_json_obj "${history_json_str}" \
   '
+    # Add back in step key as the key name
+    ( $history_json_obj | to_entries ) as $history_json_obj_as_entries |
+    map(
+      . as $task_input |
+      (
+        $history_json_obj_as_entries |
+        map(
+          select(
+            .value.task_id == ($task_input | .task_id)
+          ) |
+          .key
+        )[0]
+      ) as $step_key |
+      {
+        ($step_key): ($task_input)
+      }
+    ) |
+    add
+  '
+
 
