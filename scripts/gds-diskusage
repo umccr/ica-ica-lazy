@@ -116,7 +116,7 @@ if ! folder_id="$(get_folder_id "${volume_name}" "${folder_path}" "${ICA_BASE_UR
 fi
 
 # Trap and delete temp output file
-trap 'rm -f ${xdiskusage_temp_input_temp_dir}' EXIT
+trap 'rm -rf ${xdiskusage_temp_input_temp_dir}' EXIT
 
 xdiskusage_temp_input_temp_dir="$(mktemp -d)"
 
