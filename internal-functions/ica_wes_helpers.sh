@@ -336,6 +336,12 @@ clean_history(){
       }
     ) |
     # Add all tasks together
-    add
+    add |
+    # Then sort by timestamp
+    to_entries |
+    sort_by(
+      .value.task_launch_time
+    ) |
+    from_entries
   ' <<< "${history}"
 }
