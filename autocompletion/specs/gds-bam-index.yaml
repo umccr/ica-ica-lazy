@@ -1,0 +1,20 @@
+---
+name: gds-bam-index
+
+title: Index a bam file in gds
+
+options:
+  - name: sorted-bam-path
+    type: string
+    summary: |
+      Required, path to sorted bam path that needs to be indexed
+    completion:
+      command_string: |-
+        gds-ls "${CURRENT_WORD}" 2>/dev/null
+  - name: log-bam-path
+    type: string
+    summary: |
+      Required, path to directory we wish to store the TES logs
+    completion:
+      command_string: |-
+        gds-ls "${CURRENT_WORD}" 2>/dev/null
