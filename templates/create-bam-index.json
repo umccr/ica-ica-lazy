@@ -1,0 +1,38 @@
+{
+  "name": "samtools-index",
+  "execution": {
+    "image": {
+      "name": "ghcr.io/umccr/samtools-with-aws-cli",
+      "tag": "1.17.1--2.11.4"
+    },
+    "command": "bash",
+    "args": [
+      "-c",
+      "samtools index -o __OUTPUT_BAM_FILE_INDEX_NAME__ /mount/mount/media/inputs/__INPUT_BAM_FILE_NAME__ && AWS_REGION=\"__AWS_REGION__\" AWS_ACCESS_KEY_ID=\"${SECURE_AWS_ACCESS_KEY_ID}\" AWS_SECRET_ACCESS_KEY=\"${SECURE_AWS_SECRET_ACCESS_KEY}\" AWS_SESSION_TOKEN=\"${SECURE_AWS_SESSION_TOKEN}\" aws s3 cp \"__OUTPUT_BAM_FILE_INDEX_NAME__\" \"s3://__AWS_BUCKET_NAME__/__AWS_KEY_PREFIX__\";"
+    ],
+    "inputs": [
+      {
+        "mode": "download",
+        "type": "File",
+        "url": "__INPUT_BAM_GDS_PATH__",
+        "path": "/mount/mount/media/inputs/__INPUT_BAM_FILE_NAME__"
+      }
+    ],
+    "outputs": [],
+    "systemFiles": {
+      "url": "__GDS_SYSTEM_FILES_PATH__"
+    },
+    "environment": {
+      "variables": {
+        "SECURE_AWS_ACCESS_KEY_ID": "__AWS_ACCESS_KEY_ID__",
+        "SECURE_AWS_SECRET_ACCESS_KEY": "__AWS_SECRET_ACCESS_KEY__",
+        "SECURE_AWS_SESSION_TOKEN": "__AWS_SESSION_TOKEN__"
+      },
+      "resources": {
+        "type": "standard",
+        "size": "small"
+      }
+    },
+    "retryLimit": 0
+  }
+}
