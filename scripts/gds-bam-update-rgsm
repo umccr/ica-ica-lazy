@@ -1,0 +1,216 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+: '
+Run a TES task to update the RGSM value of a bam file in-place.
+
+Runs samtools reheader on the file
+'
+
+print_help(){
+  echo "
+Usage: gds-bam-update-rgsm (--bam-path gds://volume-name/path/to/bam-file/)
+                           (--rgsm-value <rgsm_value>)
+                           (--log-path gds://volume-name/path/to/dir/)
+
+Options:
+  --bam-path       Required, path to bam path that needs the RGSM value updated
+  --rgsm-value     Required, the replacement rgsm value
+  --log-path:      Required, path to directory we wish to store the TES logs
+  --help           Optional, print this help message and exit
+
+Requirements:
+  * jq         (v1.5+)
+  * python3 (v3.4+)
+  * curl
+
+Environment:
+  * ICA_BASE_URL
+  * ICA_ACCESS_TOKEN  (make sure you have administration permissions for this project context)
+  "
+}
+
+binaries_check(){
+  : '
+  Check each of the required binaries are available
+  '
+  if ! (type jq python3 curl 1>/dev/null); then
+    return 1
+  fi
+}
+
+# Globals
+TEMPLATE_NAME="update-bam-rgsm.json"
+
+# Get args
+bam_path=""
+rgsm_value=""
+template_path="${ICA_ICA_LAZY_HOME-}/templates/${TEMPLATE_NAME}"
+
+# Get args from command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --bam-path)
+      bam_path="$2"
+      shift 1
+      ;;
+    --rgsm-value)
+      rgsm_value="$2"
+      shift 1
+      ;;
+    -l | --log-path)
+      log_path="$2"
+      shift 1
+      ;;
+    -h | --help)
+      print_help
+      exit 0
+      ;;
+  esac
+  shift 1
+done
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
+# Ensure input / output params are set
+if [[ -z "${bam_path-}" ]]; then
+  echo_stderr "Please make sure --bam-path parameter is set"
+  exit 1
+fi
+
+# Ensure rgsm value exists
+if [[ -z "${rgsm_value-}" ]]; then
+  echo_stderr "Please make sure --rgsm-value parameter is set"
+  exit 1
+fi
+
+# Ensure log path is set
+if [[ -z "${log_path-}" ]]; then
+  echo_stderr "Please make sure --log-path parameter is set"
+  exit 1
+fi
+
+# Start
+if [[ -z "${ICA_BASE_URL-}" ]]; then
+    echo "Error: Need to set var \"ICA_BASE_URL\"" 1>&2
+    exit 1
+fi
+
+# Check access token
+if [[ -z "${ICA_ACCESS_TOKEN-}" ]]; then
+    echo "Error: Need to set var \"ICA_ACCESS_TOKEN\"" 1>&2
+    exit 1
+fi
+
+# Check gds file exists
+gds_volume_name="$( \
+  get_volume_from_gds_path \
+    "${bam_path}" \
+)"
+gds_file_path="$( \
+  get_file_path_from_gds_path \
+    "${bam_path}" \
+)"
+
+if ! gds_file_id="$( \
+  get_file_id \
+    "${gds_volume_name}" \
+    "${gds_file_path}" \
+    "${ICA_BASE_URL}" \
+    "${ICA_ACCESS_TOKEN}" \
+)"; then
+  echo_stderr "Could not get file id from '${bam_path}', please make sure the file exists and you have permissions to access this file"
+  exit 1
+fi
+
+if [[ -z "${gds_file_id}" ]]; then
+  echo_stderr "Could not get file id from '${bam_path}', please make sure the file exists and you have permissions to access this file"
+  exit 1
+fi
+
+echo_stderr "Got the file id for '${bam_path}' as '${gds_file_id}'"
+
+# Get the file size
+expected_file_size="$( \
+  get_gds_file_size \
+    "${gds_file_id}" \
+    "${ICA_BASE_URL}" \
+    "${ICA_ACCESS_TOKEN}" \
+)"
+
+# Get aws access creds
+if ! bam_upload_presigned_url_json_str="$( \
+  get_aws_access_creds_from_file_id \
+    "${gds_file_id}" \
+    "${ICA_BASE_URL}" \
+    "${ICA_ACCESS_TOKEN}"
+)"; then
+  echo_stderr "Could not generate aws s3 credentials for this file, do you have admin permissions in this project context?"
+  exit 1
+fi
+
+if [[ -z "${bam_upload_presigned_url_json_str}" || "${bam_upload_presigned_url_json_str}" == "null" ]]; then
+  echo_stderr "Could not generate aws s3 credentials for this file, do you have admin permissions in this project context?"
+  exit 1
+fi
+
+# Populate template
+trap 'rm -rf ${temp_bam_update_rgsm_tes_path}' EXIT
+temp_bam_update_rgsm_tes_path="$("$(get_mktemp_binary)" -t "bam_rgsm_update.XXX.json")"
+cp "${template_path}" "${temp_bam_update_rgsm_tes_path}"
+
+"$(get_sed_binary)" \
+  -i \
+  "
+    s#__INPUT_BAM_GDS_PATH__#${bam_path}#;
+    s#__INPUT_BAM_FILE_NAME__#$(basename "${bam_path}")#g;
+    s#__OUTPUT_BAM_FILE_NAME__#$(basename "${bam_path}")#g;
+    s#__INPUT_REPLACEMENT_RGSM_VALUE__#${rgsm_value}#g;
+    s#__EXPECTED_FILE_SIZE__#${expected_file_size}#g;
+    s#__AWS_ACCESS_KEY_ID__#$(jq --raw-output '.access_Key_Id' <<< "${bam_upload_presigned_url_json_str}")#;
+    s#__AWS_SECRET_ACCESS_KEY__#$(jq --raw-output '.secret_Access_Key' <<< "${bam_upload_presigned_url_json_str}")#;
+    s#__AWS_SESSION_TOKEN__#$(jq --raw-output '.session_Token' <<< "${bam_upload_presigned_url_json_str}")#;
+    s#__AWS_REGION__#$(jq --raw-output '.region' <<< "${bam_upload_presigned_url_json_str}")#;
+    s#__AWS_BUCKET_NAME__#$(jq --raw-output '.bucketName' <<< "${bam_upload_presigned_url_json_str}")#;
+    s#__AWS_KEY_PREFIX__#$(jq --raw-output '.keyPrefix' <<< "${bam_upload_presigned_url_json_str}")#;
+    s#__GDS_SYSTEM_FILES_PATH__#${log_path}#;
+  " \
+  "${temp_bam_update_rgsm_tes_path}"
+
+# Launch TES task
+echo_stderr "Launching bam rgsm rename TES task"
+tes_task_id="$( \
+  curl \
+    --silent \
+    --fail \
+    --location \
+    --request POST \
+    --header 'Accept: application/json' \
+    --header 'Content-Type: application/*+json' \
+    --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+    --data "@${temp_bam_update_rgsm_tes_path}" \
+    --url "${ICA_BASE_URL}/v1/tasks/runs" |
+  jq --raw-output '.id' \
+)"
+
+rm -f "${temp_bam_update_rgsm_tes_path}"
+
+echo_stderr "Launching data transfer with task run ${tes_task_id}"
+echo_stderr "Once the bam index task is complete you may remove the log directory \"${log_path}\""
+
+trap - EXIT
