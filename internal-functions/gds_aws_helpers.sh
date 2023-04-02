@@ -51,6 +51,32 @@ get_aws_write_file_access(){
     '.objectStoreAccess.awsS3TemporaryUploadCredentials' <<< "${file_object}"
 }
 
+get_aws_access_creds_from_file_id() {
+  : '
+  Use the PATCH request API on a File to get upload credentials
+  '
+  local file_id="$1"
+  local ica_base_url="$2"
+  local ica_access_token="$3"
+  local aws_credentials=""
+
+  # We're not actually patching anything, we're just getting some temporary credss
+  curl \
+    --silent \
+    --request PATCH \
+    --header 'Accept: application/json' \
+    --header 'Content-Type: application/*+json' \
+    --header "Authorization: Bearer ${ica_access_token}" \
+    "${ica_base_url}/v1/files/${file_id}?include=objectStoreAccess" | {
+    # We take the S3 upload creds
+    # Even though we're downloading only, aws s3 sync needs the put request param
+    jq \
+      --raw-output \
+      '.objectStoreAccess.awsS3TemporaryUploadCredentials'
+  }
+
+}
+
 
 get_aws_access_creds_from_folder_id() {
   : '
@@ -59,7 +85,6 @@ get_aws_access_creds_from_folder_id() {
   local folder_id="$1"
   local ica_base_url="$2"
   local ica_access_token="$3"
-  local aws_credentials=""
 
   # https://ica-docs.readme.io/reference#updatefolder expects
   # --header 'Content-Type: application/*+json'
