@@ -3,7 +3,8 @@ name: Update auto completion yaml
 on:
   push:
    branches:
-    - 'main'  # To be moved to 'main'
+    - 'main'
+    - 'dev'
    paths:
      # Template change
      - "autocompletion/specs/*.yaml"
