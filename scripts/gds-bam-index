@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+: '
+Run a TES task to compress fastq files to ORA files through dragen v4
+
+Given a directory, compress all of the fastq files and upload as ORA files
+'
+
+print_help(){
+  echo "
+Usage: gds-bam-index (--sorted-bam-path gds://volume-name/path/to/bam-file.bam)
+                     (--log-path gds:/volume-name/path/to/logs)
+
+Options:
+  --sorted-bam-path       Required, path to sorted bam path that needs to be indexed
+  --log-path:             Required, path to directory we wish to store the TES logs
+  --help                  Optional, print this help message and exit
+
+Requirements:
+  * jq         (v1.5+)
+  * python3 (v3.4+)
+  * curl
+
+Environment:
+  * ICA_BASE_URL
+  * ICA_ACCESS_TOKEN  (make sure you have administration permissions for this project context)
+  "
+}
+
+binaries_check(){
+  : '
+  Check each of the required binaries are available
+  '
+  if ! (type jq python3 curl 1>/dev/null); then
+    return 1
+  fi
+}
+
+# Globals
+TEMPLATE_NAME="create-bam-index.json"
+
+# Get args
+sorted_bam_path=""
+template_path="${ICA_ICA_LAZY_HOME-}/templates/${TEMPLATE_NAME}"
+
+# Get args from command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --sorted-bam-path)
+      sorted_bam_path="$2"
+      shift 1
+      ;;
+    -l | --log-path)
+      log_path="$2"
+      shift 1
+      ;;
+    -h | --help)
+      print_help
+      exit 0
+      ;;
+  esac
+  shift 1
+done
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
+# Ensure input / output params are set
+if [[ -z "${sorted_bam_path}" ]]; then
+  echo_stderr "Please make sure --sorted-bam-path parameter is set"
+  exit 1
+fi
+
+if [[ -z "${log_path}" ]]; then
+  echo_stderr "Please make sure --log-path parameter is set"
+  exit 1
+fi
+
+# Start
+if [[ -z "${ICA_BASE_URL-}" ]]; then
+    echo "Error: Need to set var \"ICA_BASE_URL\"" 1>&2
+    exit 1
+fi
+
+# Check access token
+if [[ -z "${ICA_ACCESS_TOKEN-}" ]]; then
+    echo "Error: Need to set var \"ICA_ACCESS_TOKEN\"" 1>&2
+    exit 1
+fi
+
+
+# Check gds file exists
+gds_volume_name="$( \
+  get_volume_from_gds_path \
+    "${sorted_bam_path}" \
+)"
+gds_file_path="$( \
+  get_file_path_from_gds_path \
+    "${sorted_bam_path}" \
+)"
+
+if ! gds_file_id="$( \
+  get_file_id \
+    "${gds_volume_name}" \
+    "${gds_file_path}" \
+    "${ICA_BASE_URL}" \
+    "${ICA_ACCESS_TOKEN}" \
+)"; then
+  echo_stderr "Could not get file id from '${sorted_bam_path}', please make sure the file exists and you have permissions to access this file"
+  exit 1
+fi
+
+if [[ -z "${gds_file_id}" ]]; then
+  echo_stderr "Could not get file id from '${sorted_bam_path}', please make sure the file exists and you have permissions to access this file"
+  exit 1
+fi
+
+echo_stderr "Got the file id for '${sorted_bam_path}' as '${gds_file_id}'"
+
+# Now check index path is also okay and non-existent
+bam_index_path="${gds_file_path}.bai"
+if gds_bam_index_path="$( \
+  get_file_id \
+    "${gds_volume_name}" \
+    "${bam_index_path}" \
+    "${ICA_BASE_URL}" \
+    "${ICA_ACCESS_TOKEN}" \
+)" && [[ -n "${gds_bam_index_path}" ]] ; then
+  echo_stderr "bam index output path '${gds_bam_index_path}' already exists! Please delete first before trying again"
+  exit 1
+fi
+
+# Get aws access creds
+if ! bam_index_upload_presigned_url_json_str="$( \
+  get_aws_write_file_access \
+    "${gds_volume_name}" \
+    "${bam_index_path}" \
+    "${ICA_BASE_URL}" \
+    "${ICA_ACCESS_TOKEN}"
+)"; then
+  echo_stderr "Could not generate aws s3 credentials for this file, do you have admin permissions in this project context?"
+  exit 1
+fi
+
+if [[ -z "${bam_index_upload_presigned_url_json_str}" ]]; then
+  echo_stderr "Could not generate aws s3 credentials for this file, do you have admin permissions in this project context?"
+  exit 1
+fi
+
+# Populate template
+temp_bam_index_creation_tes_path="$("$(get_mktemp_binary)" -t "bam_index_tes.XXX.json")"
+cp "${template_path}" "${temp_bam_index_creation_tes_path}"
+
+"$(get_sed_binary)" \
+  -i \
+  "
+    s#__INPUT_BAM_GDS_PATH__#${sorted_bam_path}#;
+    s#__INPUT_BAM_FILE_NAME__#$(basename "${sorted_bam_path}")#g;
+    s#__OUTPUT_BAM_FILE_INDEX_NAME__#$(basename "${sorted_bam_path}").bai#g;
+    s#__AWS_ACCESS_KEY_ID__#$(jq --raw-output '.access_Key_Id' <<< "${bam_index_upload_presigned_url_json_str}")#;
+    s#__AWS_SECRET_ACCESS_KEY__#$(jq --raw-output '.secret_Access_Key' <<< "${bam_index_upload_presigned_url_json_str}")#;
+    s#__AWS_SESSION_TOKEN__#$(jq --raw-output '.session_Token' <<< "${bam_index_upload_presigned_url_json_str}")#;
+    s#__AWS_REGION__#$(jq --raw-output '.region' <<< "${bam_index_upload_presigned_url_json_str}")#;
+    s#__AWS_BUCKET_NAME__#$(jq --raw-output '.bucketName' <<< "${bam_index_upload_presigned_url_json_str}")#;
+    s#__AWS_KEY_PREFIX__#$(jq --raw-output '.keyPrefix' <<< "${bam_index_upload_presigned_url_json_str}")#;
+    s#__GDS_SYSTEM_FILES_PATH__#${log_path}#;
+  " \
+  "${temp_bam_index_creation_tes_path}"
+
+# Launch TES task
+echo_stderr "Launching bam index TES task"
+tes_task_id="$( \
+  curl \
+    --silent \
+    --fail \
+    --location \
+    --request POST \
+    --header 'Accept: application/json' \
+    --header 'Content-Type: application/*+json' \
+    --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+    --data "@${temp_bam_index_creation_tes_path}" \
+    --url "${ICA_BASE_URL}/v1/tasks/runs" |
+  jq --raw-output '.id' \
+)"
+
+echo_stderr "Launching bam index task with task run ${tes_task_id}"
+echo_stderr "Once the bam index task is complete you may remove the log directory \"${log_path}\""

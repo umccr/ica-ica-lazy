@@ -28,7 +28,7 @@ print_help(){
 
         Options:
             -g / --gds-path:  Required - Path to gds file we wish to md5sum
-            --log-path:      Required - Path to directory we wish to store the TES logs
+            --log-path:       Required - Path to directory we wish to store the TES logs
             --help:           Optional - Print this help and exit
 
         Requirements:

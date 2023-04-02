@@ -1119,6 +1119,26 @@ check_file_exists(){
   fi
 }
 
+get_gds_file_size(){
+  : '
+  Get GDS file size from id
+  '
+  local file_id="${1}"
+  local ica_base_url="${2}"
+  local ica_access_token="${3}"
+
+  curl \
+    --silent \
+    --request GET \
+    --header "Authorization: Bearer ${ica_access_token}" \
+    "${ica_base_url}/v1/files/${file_id}" |
+  jq \
+    --raw-output \
+    '
+      .sizeInBytes
+    '
+}
+
 upload_gds_file(){
   : '
   Upload a file to gds
