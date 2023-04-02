@@ -1,5 +1,5 @@
 ---
-name: gds-bam-index
+name: gds-bam-update-rgsm
 
 title: Index a bam file in gds
 
@@ -11,7 +11,11 @@ options:
     completion:
       command_string: |-
         gds-ls "${CURRENT_WORD}" 2>/dev/null
-  - name: log-path
+  - name: rgsm-value
+    type: string
+    summary: |
+      Required, the rgsm value
+  - name: log-bam-path
     type: string
     summary: |
       Required, path to directory we wish to store the TES logs
