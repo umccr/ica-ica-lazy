@@ -10,7 +10,8 @@ Given a directory, compress all of the fastq files and upload as ORA files
 
 print_help(){
   echo "
-Usage: gds-bam-index (--sorted-bam-path gds://volume-name/path/to/bam-file/)
+Usage: gds-bam-index (--sorted-bam-path gds://volume-name/path/to/bam-file.bam)
+                     (--log-path gds:/volume-name/path/to/logs)
 
 Options:
   --sorted-bam-path       Required, path to sorted bam path that needs to be indexed
@@ -82,6 +83,11 @@ fi
 # Ensure input / output params are set
 if [[ -z "${sorted_bam_path}" ]]; then
   echo_stderr "Please make sure --sorted-bam-path parameter is set"
+  exit 1
+fi
+
+if [[ -z "${log_path}" ]]; then
+  echo_stderr "Please make sure --log-path parameter is set"
   exit 1
 fi
 
@@ -192,5 +198,5 @@ tes_task_id="$( \
   jq --raw-output '.id' \
 )"
 
-echo_stderr "Launching data transfer with task run ${tes_task_id}"
+echo_stderr "Launching bam index task with task run ${tes_task_id}"
 echo_stderr "Once the bam index task is complete you may remove the log directory \"${log_path}\""
