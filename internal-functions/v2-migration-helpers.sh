@@ -14,7 +14,7 @@ icav2_get_project_id_from_project_name() {
   icav2_access_token="$3"
 
   curl --silent --fail --location --request "GET" \
-    --url "https://${icav2_base_url}/ica/rest/api/projects" \
+    --url "${icav2_base_url}/api/projects" \
     --header 'Accept: application/vnd.illumina.v3+json' \
     --header "Authorization: Bearer ${icav2_access_token}" | \
   jq --raw-output \
@@ -47,7 +47,7 @@ get_v2_folder_id() {
     --header "Accept: application/vnd.illumina.v3+json" \
     --header "Authorization: Bearer ${dest_project_access_token}" \
     --get \
-    --url "https://${icav2_base_url}/ica/rest/api/projects/${project_id}/data" \
+    --url "${icav2_base_url}/api/projects/${project_id}/data" \
     --data "$( \
       jq --null-input --raw-output --compact-output \
         --arg parent_folder_path "${parent_folder_path}" \
@@ -93,7 +93,7 @@ create_v2_folder() {
     --header "Accept: application/vnd.illumina.v3+json" \
     --header 'Content-Type: application/vnd.illumina.v3+json' \
     --header "Authorization: Bearer ${project_access_token}" \
-    --url "https://${icav2_base_url}/ica/rest/api/projects/${project_id}/data" \
+    --url "${icav2_base_url}/api/projects/${project_id}/data" \
     --data "$( \
       jq --null-input --raw-output --compact-output \
         --arg parent_folder_path "${parent_folder_path}" \
@@ -136,7 +136,7 @@ create_v2_file(){
     --header "Accept: application/vnd.illumina.v3+json" \
     --header 'Content-Type: application/vnd.illumina.v3+json' \
     --header "Authorization: Bearer ${project_access_token}" \
-    --url "https://${icav2_base_url}/ica/rest/api/projects/${project_id}/data" \
+    --url "${icav2_base_url}/api/projects/${project_id}/data" \
     --data "$( \
       jq --null-input --raw-output --compact-output \
         --arg parent_folder_path "${parent_folder_path}" \
@@ -167,7 +167,7 @@ get_v2_file_presigned_url_from_file_id(){
     --request "POST" \
     --header "Accept: application/vnd.illumina.v3+json" \
     --header "Authorization: Bearer ${project_access_token}" \
-    --url "https://${icav2_base_url}/ica/rest/api/projects/${project_id}/data/${data_id}:createDownloadUrl" | \
+    --url "${icav2_base_url}/api/projects/${project_id}/data/${data_id}:createDownloadUrl" | \
   jq --raw-output \
     '.url'
 }
@@ -187,7 +187,7 @@ get_v2_file_upload_presigned_url_from_file_id(){
     --request "POST" \
     --header "Accept: application/vnd.illumina.v3+json" \
     --header "Authorization: Bearer ${project_access_token}" \
-    --url "https://${icav2_base_url}/ica/rest/api/projects/${project_id}/data/${data_id}:createUploadUrl" | \
+    --url "${icav2_base_url}/api/projects/${project_id}/data/${data_id}:createUploadUrl" | \
   jq --raw-output \
     '.url'
 }
@@ -223,7 +223,7 @@ get_v2_folder_aws_credentials(){
     --header "Accept: application/vnd.illumina.v3+json" \
     --header "Content-Type: application/vnd.illumina.v3+json" \
     --header "Authorization: Bearer ${project_access_token}" \
-    --url "https://${icav2_base_url}/ica/rest/api/projects/${project_id}/data/${data_id}:createTemporaryCredentials" | \
+    --url "${icav2_base_url}/api/projects/${project_id}/data/${data_id}:createTemporaryCredentials" | \
   jq --raw-output \
     '.awsTempCredentials'
 }
