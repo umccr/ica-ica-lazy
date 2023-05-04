@@ -66,6 +66,9 @@ download_path="$PWD"
 base_url="${ICA_BASE_URL-}"
 access_token="${ICA_ACCESS_TOKEN-}"
 
+write_script_path_set="false"
+write_script_path=""
+
 # Get args from command line
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -78,6 +81,7 @@ while [ $# -gt 0 ]; do
       shift 1
       ;;
     -o | --write-script-path)
+      write_script_path_set="true"
       write_script_path="$2"
       shift 1
       ;;
@@ -159,13 +163,19 @@ if [[ "${gds_path}" =~ ^--.* ]]; then
 fi
 
 if [[ "${download_path}" =~ ^--.* ]]; then
-  echo_stderr "Incorrect usage"
+  echo_stderr "Incorrect usage of --download-path"
+  print_help
+  exit 1
+fi
+
+if [[ "${write_script_path_set}" == "true" && -z "${write_script_path}" ]]; then
+  echo_stderr "Incorrect usage of --write-script-path"
   print_help
   exit 1
 fi
 
 if [[ "${write_script_path}" =~ ^--.* ]]; then
-  echo_stderr "Incorrect usage"
+  echo_stderr "Incorrect usage of --write-script-path"
   print_help
   exit 1
 fi
