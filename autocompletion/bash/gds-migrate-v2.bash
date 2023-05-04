@@ -108,7 +108,7 @@ _gds-migrate-v2__option_dest_project_completion() {
     local param_dest_project="$(
 if [[ -n "${ICAV2_ACCESS_TOKEN-}" ]]; then
   curl --silent --fail --location --request "GET" \
-       --url "${ICAV2_BASE_URL-ica.illumina.com/ica/rest}/api/projects" \
+       --url "${ICAV2_BASE_URL-https://ica.illumina.com/ica/rest/}api/projects" \
        --header 'Accept: application/vnd.illumina.v3+json' \
        --header "Authorization: Bearer ${ICAV2_ACCESS_TOKEN}" | \
   jq --raw-output '.items[] | .name'
@@ -155,7 +155,7 @@ if [[ -n "${ICAV2_ACCESS_TOKEN-}" ]]; then
       --request "GET" \
       --header "Accept: application/vnd.illumina.v3+json" \
       --header "Authorization: Bearer ${ICAV2_ACCESS_TOKEN}" \
-      --url "${ICAV2_BASE_URL-https://ica.illumina.com/ica/rest/}api/projects/${project_id}/data?parentFolderPath=${parent_folder%/}/&filenameMatchMode=EXACT&type=FOLDER" |
+      --url "${ICAV2_BASE_URL-https://ica.illumina.com/ica/rest/}api/projects/${project_id}/data?parentFolderPath=${parent_folder%/}/&filenameMatchMode=EXACT&type=FOLDER" | 
     jq --raw-output \
       '.items[] | .data.details.path';
   fi
