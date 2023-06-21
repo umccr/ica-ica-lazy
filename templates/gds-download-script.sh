@@ -98,7 +98,7 @@ get_filesize_in_bytes(){
   '
   local file="$1"
 
-  stat --format "%s" "${file}"
+  "$(get_stat_binary)" --format "%s" "${file}"
 }
 
 get_filesize_in_mb(){
