@@ -46,7 +46,7 @@ is_input_required(){
 
   # Input is optional if type attribute is an array and "null" is in the type array
   jq --raw-output \
-      'if ((.type | type == "array") and (.type | any("null")) and ( has(.default) | not ) ) then
+      'if ( ((.type | type == "array") and (.type | any("null"))) or has("default") ) then
           "false"
       else
           "true"
