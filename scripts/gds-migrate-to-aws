@@ -214,6 +214,9 @@ if [[ -n "${AWS_ACCESS_KEY_ID-}" && -n "${AWS_SECRET_ACCESS_KEY}" && -n "${AWS_S
   aws_secret_access_key="${AWS_SECRET_ACCESS_KEY}"
   aws_session_token="${AWS_SESSION_TOKEN}"
 elif type aws-sso-creds 1>/dev/null 2>&1; then
+  if [[ -z "${AWS_PROFILE-}" && -z "${AWS_DEFAULT_PROFILE-}" ]]; then
+    echo_stderr "Cannot use aws-sso-creds without knowing the aws profile. Please set either AWS_PROFILE or AWS_DEFAULT_PROFILE environment vars and try again"
+  fi
   # Crete aws access key id
   aws_sso_creds_str="$( \
     aws-sso-creds export | \
