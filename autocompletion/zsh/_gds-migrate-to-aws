@@ -1,0 +1,120 @@
+#compdef gds-migrate-to-aws
+
+# Generated with perl module App::Spec v0.014
+
+_gds-migrate-to-aws() {
+    local program=gds-migrate-to-aws
+    typeset -A opt_args
+    local curcontext="$curcontext" state line context
+
+
+        # ---- Command: 
+        _arguments -s  \
+            '--gds-path[Path to gds source directory
+]:gds-path:_gds-migrate-to-aws__option_gds_path_completion' \
+            '--s3-path[path to s3 dest directory
+]:s3-path:_gds-migrate-to-aws__option_s3_path_completion' \
+            '--stream[Use stream mode for inputs, download is default]:stream' \
+            '--help[Show command help]' \
+            '-h[Show command help]' \
+            && ret=0
+
+
+
+}
+
+_gds-migrate-to-aws__option_gds_path_completion() {
+    local __dynamic_completion
+    local CURRENT_WORD="$words[CURRENT]"
+    IFS=$'\n' __dynamic_completion=( $( 
+gds-ls "${CURRENT_WORD}" 2>/dev/null
+ ) )
+    compadd -X "gds_path:" $__dynamic_completion
+}
+_gds-migrate-to-aws__option_s3_path_completion() {
+    local __dynamic_completion
+    local CURRENT_WORD="$words[CURRENT]"
+    IFS=$'\n' __dynamic_completion=( $( 
+bucket_name="$(python3 -c "from urllib.parse import urlparse; print(urlparse('${CURRENT_WORD}').netloc)")"
+if [[ -n "${bucket_name}" ]]; then
+  # O for false 1 for true
+  has_bucket="$(
+    aws s3api list-buckets --output=json | \
+    jq --raw-output \
+      --arg bucket_name "${bucket_name}" \
+      '
+        .Buckets | 
+        map(
+          select(
+            .Name == $bucket_name
+          )
+        ) |
+        length
+      '
+  )"
+fi
+# Show buckets
+if [[ -z "${bucket_name}" || "${has_bucket-}" == "0" ]]; then
+  # List the buckets
+  aws s3api list-buckets --output=json | \
+  jq --raw-output \
+    '
+      .Buckets | 
+      map("s3://" + .Name) | 
+      .[]
+    '
+  return
+fi
+
+# Have bucket get path
+# Get directory name of the key prefix unless were in root dir or s3_path ends with /  
+s3_path="$(python3 -c "from urllib.parse import urlparse; print(urlparse('${CURRENT_WORD}').path.lstrip('/'))")"
+if [[ "${s3_path}" == */ || -z "${s3_path}" || "${s3_path}" != */* ]]; then
+  :  # Pass
+else
+  s3_path="$(dirname "${s3_path}")/"
+fi
+
+aws s3api list-objects-v2 \
+  --bucket "${bucket_name}" \
+  --prefix "${s3_path}" \
+  --delimiter "/" \
+  --output json | \
+jq --raw-output \
+  --arg bucket_name "${bucket_name}" \
+  '
+    .CommonPrefixes? | 
+    map(
+      .Prefix
+    ) |
+    sort | 
+    map(
+      "s3://" + $bucket_name + "/" + .
+    ) |
+    .[]
+  '
+ ) )
+    compadd -X "s3_path:" $__dynamic_completion
+}
+
+__gds-migrate-to-aws_dynamic_comp() {
+    local argname="$1"
+    local arg="$2"
+    local comp="arg:$argname:(("
+    local line
+    while read -r line; do
+        local name="$line"
+        local desc="$line"
+        name="${name%$'\t'*}"
+        desc="${desc/*$'\t'}"
+        comp="$comp$name"
+        if [[ -n "$desc" && "$name" != "$desc" ]]; then
+            comp="$comp\\:"'"'"$desc"'"'
+        fi
+        comp="$comp "
+    done <<< "$arg"
+
+    comp="$comp))"
+    _alternative "$comp"
+}
+

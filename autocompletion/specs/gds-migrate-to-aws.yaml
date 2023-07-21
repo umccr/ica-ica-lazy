@@ -1,0 +1,79 @@
+---
+name: gds-migrate-to-aws
+
+title: move files from gds to your aws s3 account with aws s3 sync command
+
+options:
+  - name: gds-path
+    summary: |
+      Path to gds source directory
+    type: string
+    completion:
+      command_string: |-
+        gds-ls "${CURRENT_WORD}" 2>/dev/null
+  - name: s3-path
+    summary: |
+      path to s3 dest directory
+    type: string
+    completion:
+      command_string: |-
+        bucket_name="$(python3 -c "from urllib.parse import urlparse; print(urlparse('${CURRENT_WORD}').netloc)")"
+        if [[ -n "${bucket_name}" ]]; then
+          # O for false 1 for true
+          has_bucket="$(
+            aws s3api list-buckets --output=json | \
+            jq --raw-output \
+              --arg bucket_name "${bucket_name}" \
+              '
+                .Buckets | 
+                map(
+                  select(
+                    .Name == $bucket_name
+                  )
+                ) |
+                length
+              '
+          )"
+        fi
+        # Show buckets
+        if [[ -z "${bucket_name}" || "${has_bucket-}" == "0" ]]; then
+          # List the buckets
+          aws s3api list-buckets --output=json | \
+          jq --raw-output \
+            '
+              .Buckets | 
+              map("s3://" + .Name) | 
+              .[]
+            '
+          return
+        fi
+        
+        # Have bucket get path
+        # Get directory name of the key prefix unless were in root dir or s3_path ends with /  
+        s3_path="$(python3 -c "from urllib.parse import urlparse; print(urlparse('${CURRENT_WORD}').path.lstrip('/'))")"
+        if [[ "${s3_path}" == */ || -z "${s3_path}" || "${s3_path}" != */* ]]; then
+          :  # Pass
+        else
+          s3_path="$(dirname "${s3_path}")/"
+        fi
+        
+        aws s3api list-objects-v2 \
+          --bucket "${bucket_name}" \
+          --prefix "${s3_path}" \
+          --delimiter "/" \
+          --output json | \
+        jq --raw-output \
+          --arg bucket_name "${bucket_name}" \
+          '
+            .CommonPrefixes? | 
+            map(
+              .Prefix
+            ) |
+            sort | 
+            map(
+              "s3://" + $bucket_name + "/" + .
+            ) |
+            .[]
+          '
+  - name: stream
+    summary: Use stream mode for inputs, download is default
