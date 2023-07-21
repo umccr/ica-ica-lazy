@@ -1,6 +1,6 @@
 #compdef gds-folder-summary
 
-# Generated with perl module App::Spec v0.000
+# Generated with perl module App::Spec v0.014
 
 _gds-folder-summary() {
     local program=gds-folder-summary

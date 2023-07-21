@@ -1,6 +1,6 @@
 #compdef gds-create-download-script
 
-# Generated with perl module App::Spec v0.000
+# Generated with perl module App::Spec v0.014
 
 _gds-create-download-script() {
     local program=gds-create-download-script

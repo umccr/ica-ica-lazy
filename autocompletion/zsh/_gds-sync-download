@@ -1,6 +1,6 @@
 #compdef gds-sync-download
 
-# Generated with perl module App::Spec v0.000
+# Generated with perl module App::Spec v0.014
 
 _gds-sync-download() {
     local program=gds-sync-download

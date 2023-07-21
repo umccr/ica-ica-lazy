@@ -1,6 +1,6 @@
 #compdef ica-check-cwl-inputs
 
-# Generated with perl module App::Spec v0.000
+# Generated with perl module App::Spec v0.014
 
 _ica-check-cwl-inputs() {
     local program=ica-check-cwl-inputs
