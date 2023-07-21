@@ -1,6 +1,6 @@
 #compdef ica-add-access-token
 
-# Generated with perl module App::Spec v0.000
+# Generated with perl module App::Spec v0.014
 
 _ica-add-access-token() {
     local program=ica-add-access-token

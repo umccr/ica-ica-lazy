@@ -2,11 +2,11 @@
 
 # Generated with perl module App::Spec v0.014
 
-_ica-plot-tasks-pod-metrics() {
+_gds-migrate-to-aws() {
 
     COMPREPLY=()
     local IFS=$'\n'
-    local program=ica-plot-tasks-pod-metrics
+    local program=gds-migrate-to-aws
     local cur prev words cword
     _init_completion -n : || return
     declare -a FLAGS
@@ -17,18 +17,19 @@ _ica-plot-tasks-pod-metrics() {
     MYWORDS=("${words[@]:1:$cword}")
 
     FLAGS=('--help' 'Show command help' '-h' 'Show command help')
-    OPTIONS=('--ica-tasks-list' 'ICA tasks run id
-' '--output-prefix' 'The output prefix
-' '--title-prefix' 'The title prefix
-')
-    __ica-plot-tasks-pod-metrics_handle_options_flags
+    OPTIONS=('--gds-path' 'Path to gds source directory
+' '--s3-path' 'path to s3 dest directory
+' '--stream' 'Use stream mode for inputs, download is default')
+    __gds-migrate-to-aws_handle_options_flags
 
     case ${MYWORDS[$INDEX-1]} in
-      --ica-tasks-list)
+      --gds-path)
+        _gds-migrate-to-aws__option_gds_path_completion
       ;;
-      --output-prefix)
+      --s3-path)
+        _gds-migrate-to-aws__option_s3_path_completion
       ;;
-      --title-prefix)
+      --stream)
       ;;
 
     esac
@@ -41,7 +42,7 @@ _ica-plot-tasks-pod-metrics() {
 
 }
 
-_ica-plot-tasks-pod-metrics_compreply() {
+_gds-migrate-to-aws_compreply() {
     local prefix=""
     cur="$(printf '%q' "$cur")"
     COMPREPLY=($(compgen -P "$prefix" -W "$*" -- "$cur"))
@@ -54,8 +55,79 @@ _ica-plot-tasks-pod-metrics_compreply() {
     fi
 }
 
+_gds-migrate-to-aws__option_gds_path_completion() {
+    local CURRENT_WORD="${words[$cword]}"
+    local param_gds_path="$(
+gds-ls "${CURRENT_WORD}" 2>/dev/null
+)"
+    _gds-migrate-to-aws_compreply "$param_gds_path"
+}
+_gds-migrate-to-aws__option_s3_path_completion() {
+    local CURRENT_WORD="${words[$cword]}"
+    local param_s3_path="$(
+bucket_name="$(python3 -c "from urllib.parse import urlparse; print(urlparse('${CURRENT_WORD}').netloc)")"
+if [[ -n "${bucket_name}" ]]; then
+  # O for false 1 for true
+  has_bucket="$(
+    aws s3api list-buckets --output=json | \
+    jq --raw-output \
+      --arg bucket_name "${bucket_name}" \
+      '
+        .Buckets | 
+        map(
+          select(
+            .Name == $bucket_name
+          )
+        ) |
+        length
+      '
+  )"
+fi
+# Show buckets
+if [[ -z "${bucket_name}" || "${has_bucket-}" == "0" ]]; then
+  # List the buckets
+  aws s3api list-buckets --output=json | \
+  jq --raw-output \
+    '
+      .Buckets | 
+      map("s3://" + .Name) | 
+      .[]
+    '
+  return
+fi
 
-__ica-plot-tasks-pod-metrics_dynamic_comp() {
+# Have bucket get path
+# Get directory name of the key prefix unless were in root dir or s3_path ends with /  
+s3_path="$(python3 -c "from urllib.parse import urlparse; print(urlparse('${CURRENT_WORD}').path.lstrip('/'))")"
+if [[ "${s3_path}" == */ || -z "${s3_path}" || "${s3_path}" != */* ]]; then
+  :  # Pass
+else
+  s3_path="$(dirname "${s3_path}")/"
+fi
+
+aws s3api list-objects-v2 \
+  --bucket "${bucket_name}" \
+  --prefix "${s3_path}" \
+  --delimiter "/" \
+  --output json | \
+jq --raw-output \
+  --arg bucket_name "${bucket_name}" \
+  '
+    .CommonPrefixes? | 
+    map(
+      .Prefix
+    ) |
+    sort | 
+    map(
+      "s3://" + $bucket_name + "/" + .
+    ) |
+    .[]
+  '
+)"
+    _gds-migrate-to-aws_compreply "$param_s3_path"
+}
+
+__gds-migrate-to-aws_dynamic_comp() {
     local argname="$1"
     local arg="$2"
     local name desc cols desclength formatted
@@ -87,10 +159,10 @@ __ica-plot-tasks-pod-metrics_dynamic_comp() {
             comp+=("'$name'")
         fi
     done <<< "$arg"
-    _ica-plot-tasks-pod-metrics_compreply ${comp[@]}
+    _gds-migrate-to-aws_compreply ${comp[@]}
 }
 
-function __ica-plot-tasks-pod-metrics_handle_options() {
+function __gds-migrate-to-aws_handle_options() {
     local i j
     declare -a copy
     local last="${MYWORDS[$INDEX]}"
@@ -117,7 +189,7 @@ function __ica-plot-tasks-pod-metrics_handle_options() {
     MYWORDS=("${copy[@]}" "$last")
 }
 
-function __ica-plot-tasks-pod-metrics_handle_flags() {
+function __gds-migrate-to-aws_handle_flags() {
     local i j
     declare -a copy
     local last="${MYWORDS[$INDEX]}"
@@ -143,9 +215,9 @@ function __ica-plot-tasks-pod-metrics_handle_flags() {
     MYWORDS=("${copy[@]}" "$last")
 }
 
-__ica-plot-tasks-pod-metrics_handle_options_flags() {
-    __ica-plot-tasks-pod-metrics_handle_options
-    __ica-plot-tasks-pod-metrics_handle_flags
+__gds-migrate-to-aws_handle_options_flags() {
+    __gds-migrate-to-aws_handle_options
+    __gds-migrate-to-aws_handle_flags
 }
 
 __comp_current_options() {
@@ -168,7 +240,7 @@ __comp_current_options() {
           local desc="${OPTIONS[$j+1]}"
           options_spec+="$name"$'\t'"$desc"$'\n'
       done
-      __ica-plot-tasks-pod-metrics_dynamic_comp 'options' "$options_spec"
+      __gds-migrate-to-aws_dynamic_comp 'options' "$options_spec"
 
       return 1
     else
@@ -177,5 +249,5 @@ __comp_current_options() {
 }
 
 
-complete -o default -F _ica-plot-tasks-pod-metrics ica-plot-tasks-pod-metrics
+complete -o default -F _gds-migrate-to-aws gds-migrate-to-aws
 

@@ -1,6 +1,6 @@
 #compdef gds-blame
 
-# Generated with perl module App::Spec v0.000
+# Generated with perl module App::Spec v0.014
 
 _gds-blame() {
     local program=gds-blame

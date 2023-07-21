@@ -93,7 +93,7 @@ while [ $# -gt 0 ]; do
       # Let's add in the parameter arg
       aws_s3_sync_args=("${aws_s3_sync_args[@]}" "$1")
       # First check if $2 is of any length
-      if [[ -n "$2" ]]; then
+      if [[ -n "${2-}" ]]; then
         # Check if the parameter takes a value
         case "$2" in
           --*)

@@ -1,6 +1,6 @@
 #compdef ica-make-md5sum
 
-# Generated with perl module App::Spec v0.000
+# Generated with perl module App::Spec v0.014
 
 _ica-make-md5sum() {
     local program=ica-make-md5sum

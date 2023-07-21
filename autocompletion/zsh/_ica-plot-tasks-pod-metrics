@@ -1,6 +1,6 @@
 #compdef ica-plot-tasks-pod-metrics
 
-# Generated with perl module App::Spec v0.000
+# Generated with perl module App::Spec v0.014
 
 _ica-plot-tasks-pod-metrics() {
     local program=ica-plot-tasks-pod-metrics

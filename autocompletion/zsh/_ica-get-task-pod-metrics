@@ -1,6 +1,6 @@
 #compdef ica-get-task-pod-metrics
 
-# Generated with perl module App::Spec v0.000
+# Generated with perl module App::Spec v0.014
 
 _ica-get-task-pod-metrics() {
     local program=ica-get-task-pod-metrics

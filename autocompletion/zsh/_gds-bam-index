@@ -1,6 +1,6 @@
 #compdef gds-bam-index
 
-# Generated with perl module App::Spec v0.000
+# Generated with perl module App::Spec v0.014
 
 _gds-bam-index() {
     local program=gds-bam-index

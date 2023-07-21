@@ -1,6 +1,6 @@
 #compdef ica-fastq-gzip-to-ora
 
-# Generated with perl module App::Spec v0.000
+# Generated with perl module App::Spec v0.014
 
 _ica-fastq-gzip-to-ora() {
     local program=ica-fastq-gzip-to-ora

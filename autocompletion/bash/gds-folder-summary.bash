@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 
-# Generated with perl module App::Spec v0.000
+# Generated with perl module App::Spec v0.014
 
 _gds-folder-summary() {
 
     COMPREPLY=()
+    local IFS=$'\n'
     local program=gds-folder-summary
     local cur prev words cword
     _init_completion -n : || return
@@ -49,9 +50,8 @@ _gds-folder-summary() {
 
 _gds-folder-summary_compreply() {
     local prefix=""
-    local IFS=$'\n'
     cur="$(printf '%q' "$cur")"
-    IFS=$IFS COMPREPLY=($(compgen -P "$prefix" -W "$*" -- "$cur"))
+    COMPREPLY=($(compgen -P "$prefix" -W "$*" -- "$cur"))
     __ltrim_colon_completions "$prefix$cur"
 
     # http://stackoverflow.com/questions/7267185/bash-autocompletion-add-description-for-possible-completions
