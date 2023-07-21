@@ -1,0 +1,286 @@
+#!/usr/bin/env bash
+
+: '
+Migrate from GDS to a AWS S3 bucket using aws s3 sync in a TES task
+
+User must have read access to the source directory, and write access to the destination project
+
+Step 1: Get the urls from the destination project (similar to gds-create-download-script)
+Step 2: Create the manifest file and upload to the development project (outside the destination directory)
+Step 3: Create output folder in the source directory and get credentials
+Step 4: Run TES task - populating the following attributes from the task run template
+__GDS_MANIFEST_JSON_URL__
+__AWS_S3_BUCKET__
+__AWS_S3_PATH__
+__AWS_ACCESS_KEY_ID__
+__AWS_SECRET_ACCESS_KEY__
+__AWS_SESSION_TOKEN__
+__GDS_SYSTEM_FILES_PATH__
+'
+
+# Set to fail
+set -euo pipefail
+
+# Globals
+TEMPLATE_NAME="gds-migrate-to-aws-task-run.json"
+
+###########
+# FUNCTIONS
+###########
+
+# Help function
+print_help(){
+  echo "
+        Usage: gds-migrate-to-aws (--gds-path gds://volume-name/path-to-src-folder/) (--s3-path)
+                                  [--stream]
+
+        Description:
+          Copy data from one project folder to a folder in another project context
+
+        Options:
+            --gds-path:          path to gds source directory
+            --s3-path:           path to gds dest directory
+            --stream:            Use stream mode for inputs, download is default
+            ...                  Additional arguments are parsed to s3-sync
+
+        Requirements:
+          * aws
+          * aws-sso-creds
+          * jq     (v1.5+)
+          * python3 (v3.4+)
+
+        Environment:
+          * ICA_BASE_URL
+          * ICA_ACCESS_TOKEN
+          * AWS_PROFILE
+          * AWS_REGION
+
+        Extras:
+            *  You can also use any of the aws s3 sync parameters to add to the command list, for example
+               gds-migrate-to-aws --gds-path gds://volume-name/path-to-folder/ --s3-path s3://temp-bucket/folder/ --exclude='*' --include='*.fastq.gz'
+               will download only fastq files from that gds folder.
+
+               Unlike rsync, trailing slashes on the --gds-path and --s3-path do not matter. One can assume that
+               a trailing slash exists on both parameters. This means that the contents inside the --gds-path parameter are
+               downloaded to the contents inside --s3-path
+
+               You should use the --stream option if the output will be relatively small compared to the input.
+
+               aws-sso-creds can be downloaded from the releases page at https://github.com/jaxxstorm/aws-sso-creds
+
+        A token with at least read-only scope must be registered for the source path.
+
+        Example:
+          gds-migrate-to-aws --gds-path gds://volume-name/path-to-folder/ --s3-path s3://temp-bucket/folder/ --exclude='*' --include='*.fastq.gz'
+        "
+}
+
+###########
+# GET ARGS
+###########
+
+# Get args
+src_gds_path=""
+src_project=""
+dest_s3_path=""
+aws_s3_sync_args_array=""
+input_mode="download"
+template_path="${ICA_ICA_LAZY_HOME-}/templates/${TEMPLATE_NAME}"
+
+# Get args from command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --gds-path)
+      src_gds_path="$2"
+      shift 1
+      ;;
+    --s3-path)
+      dest_s3_path="$2"
+      shift 1
+      ;;
+    --stream)
+      input_mode="stream"
+      ;;
+    -h | --help)
+      print_help
+      exit 0
+      ;;
+    --*)
+      # Let's add in the parameter arg
+      aws_s3_sync_args_array=("${aws_s3_sync_args_array[@]}" "$1")
+      # First check if $2 is of any length
+      if [[ -n "${2-}" ]]; then
+        # Check if the parameter takes a value
+        case "$2" in
+          --*)
+            # Check if just another parameter, ignore for now
+            :
+            ;;
+          *)
+            aws_s3_sync_args_array=("${aws_s3_sync_args_array[@]}" "$2")
+            shift 1
+            ;;
+        esac
+      fi
+      ;;
+  esac
+  shift 1
+done
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
+# Ensure gds_path params are set
+if [[ -z "${src_gds_path}" ]]; then
+  echo_stderr "Please make sure --gds-path parameter is set"
+  exit 1
+fi
+if [[ -z "${dest_s3_path}" ]]; then
+  echo_stderr "Please make sure --s3-path parameter is set"
+  exit 1
+fi
+
+# Start
+if [[ -z "${ICA_BASE_URL-}" ]]; then
+    echo "Error: Need to set var \"ICA_BASE_URL\"" 1>&2
+    exit 1
+fi
+
+# Check token
+if [[ -z "${ICA_ACCESS_TOKEN}" ]]; then
+  echo "Error: ICA ACCESS TOKEN must be set" 1>&2
+fi
+
+# Get the src stuff volume name / folder path
+src_volume_name="$(get_volume_from_gds_path "${src_gds_path}")"
+src_folder_path="$(get_folder_path_from_gds_path "${src_gds_path}")"
+
+if ! check_path_is_folder "${src_volume_name}" "${src_folder_path}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"; then
+  echo_stderr "Could not confirm ${src_gds_path} was a valid gds path in the ${src_project} context"
+  exit 1
+fi
+
+# Get file list object as a gds file list in the source
+echo_stderr "Collecting presigned urls from source path"
+file_list_obj="$(get_gds_file_list_as_digestible "${src_volume_name}" "${src_folder_path}" "true" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}")"
+
+# Reshape json and write out
+temp_manifest_path="$("$(get_mktemp_binary)" -t "manifest.XXX.json")"
+jq --raw-output \
+  '. | select(.file_size != 0) | {url: .presigned_url, size: .file_size, path: .output_path}' <<< "${file_list_obj}" | \
+jq --raw-output --slurp > "${temp_manifest_path}"
+
+# Get the dest stuff volume name / folder path
+dest_volume_name="$(get_volume_from_gds_path "${dest_s3_path}")"
+dest_folder_path="$(get_folder_path_from_gds_path "${dest_s3_path}")"
+dest_folder_parent="$(dirname "${dest_folder_path}")"
+log_path="${dest_folder_parent}/logs"
+
+# Upload manifest
+s3_manifest_path="s3://${dest_volume_name}${dest_folder_parent}/$(basename "${temp_manifest_path}")"
+echo_stderr "Uploading file ${temp_manifest_path} to ${s3_manifest_path}"
+echo "Uploading manifest file to s3"
+aws s3 cp "${temp_manifest_path}" "${s3_manifest_path}"
+manifest_presigned_url="$( \
+  aws s3 presign "${s3_manifest_path}" \
+)"
+
+# Create log directory
+aws s3api put-object --bucket "${dest_volume_name}" --key "${log_path#/}/" --content-length 0
+
+# Create temp file with template
+temp_test_migration_path="$("$(get_mktemp_binary)" -t "tes-migrate.XXX.json")"
+cp "${template_path}" "${temp_test_migration_path}"
+
+
+if [[ -n "${AWS_ACCESS_KEY_ID-}" && -n "${AWS_SECRET_ACCESS_KEY}" && -n "${AWS_SESSION_TOKEN}" ]]; then
+  : '
+  Were all good here!
+  '
+  aws_access_key_id="${AWS_ACCESS_KEY_ID}"
+  aws_secret_access_key="${AWS_SECRET_ACCESS_KEY}"
+  aws_session_token="${AWS_SESSION_TOKEN}"
+elif type aws-sso-creds 1>/dev/null 2>&1; then
+  # Crete aws access key id
+  aws_sso_creds_str="$( \
+    aws-sso-creds export | \
+    "$(get_sed_binary)" 's/export //' \
+  )"
+
+  aws_access_key_id="$(
+    grep "AWS_ACCESS_KEY_ID=" <<< "${aws_sso_creds_str}" | "$(get_sed_binary)" 's/AWS_ACCESS_KEY_ID=//'
+  )"
+
+  aws_secret_access_key="$(
+    grep "AWS_SECRET_ACCESS_KEY=" <<< "${aws_sso_creds_str}" | "$(get_sed_binary)" 's/AWS_SECRET_ACCESS_KEY=//'
+  )"
+
+  aws_session_token="$(
+    grep "AWS_SESSION_TOKEN=" <<< "${aws_sso_creds_str}" | "$(get_sed_binary)" 's/AWS_SESSION_TOKEN=//'
+  )"
+else
+  echo_stderr "No way to get AWS credentials, please install aws-sso-creds or set the following environment vars"
+  echo_stderr "AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN"
+fi
+
+
+# Update template TES json
+echo_stderr "Populating TES task template"
+"$(get_sed_binary)" -i "s#__GDS_MANIFEST_JSON_URL__#${manifest_presigned_url//&/\\&}#" "${temp_test_migration_path}"
+"$(get_sed_binary)" -i "s%__AWS_ACCESS_KEY_ID__%${aws_access_key_id}%" "${temp_test_migration_path}"
+"$(get_sed_binary)" -i "s%__AWS_SECRET_ACCESS_KEY__%${aws_secret_access_key}%" "${temp_test_migration_path}"
+"$(get_sed_binary)" -i "s%__AWS_SESSION_TOKEN__%${aws_session_token}%" "${temp_test_migration_path}"
+"$(get_sed_binary)" -i "s%__AWS_S3_LOGS_PATH__%s3://${dest_volume_name}${log_path}%" "${temp_test_migration_path}"
+
+# Add in rsync args
+for s3_sync_arg in "${aws_s3_sync_args_array[@]}"; do
+  if [[ -n "${s3_sync_arg}" ]]; then
+    s3_sync_str+="  \\\\"'"'"${s3_sync_arg}\\\\"'"'
+  fi
+done
+
+if [[ -v s3_sync_str ]]; then
+  "$(get_sed_binary)" -i "s%__ADDITIONAL_S3_SYNC_ARGS__%${s3_sync_str}%" "${temp_test_migration_path}"
+else
+  "$(get_sed_binary)" -i "s%__ADDITIONAL_S3_SYNC_ARGS__%%" "${temp_test_migration_path}"
+fi
+
+"$(get_sed_binary)" -i "s%__AWS_S3_DEST_PATH__%${dest_s3_path}%" "${temp_test_migration_path}"
+
+# Determine if stream or download
+"$(get_sed_binary)" -i "s%__STREAM_OR_DOWNLOAD__%${input_mode}%" "${temp_test_migration_path}"
+
+# Launch the tes task
+echo_stderr "Launching TES task"
+tes_task_id="$( \
+  curl \
+    --silent \
+    --fail-with-body \
+    --show-error \
+    --location \
+    --request POST \
+    --header 'Accept: application/json' \
+    --header 'Content-Type: application/*+json' \
+    --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+    --data "@${temp_test_migration_path}" \
+    --url "${ICA_BASE_URL}/v1/tasks/runs" |
+    jq --raw-output \
+      '.id' \
+)"
+
+echo_stderr "Launching data transfer with task run ${tes_task_id}"
+
+# rm "${temp_test_migration_path}"

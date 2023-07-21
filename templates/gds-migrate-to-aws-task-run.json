@@ -1,0 +1,44 @@
+{
+  "name": "gds-migrate-to-aws",
+  "execution": {
+    "image": {
+      "name": "ghcr.io/umccr/aws-cli-with-extras",
+      "tag": "2.9.19"
+    },
+    "command": "bash",
+    "args": [
+      "-c",
+      "AWS_ACCESS_KEY_ID=\"${SECURE_AWS_ACCESS_KEY_ID}\" AWS_SECRET_ACCESS_KEY=\"${SECURE_AWS_SECRET_ACCESS_KEY}\" AWS_SESSION_TOKEN=\"${SECURE_AWS_SESSION_TOKEN}\" aws s3 sync /mount/mount/media/inputs/ \"__AWS_S3_DEST_PATH__\"__ADDITIONAL_S3_SYNC_ARGS__"
+    ],
+    "inputs": [
+      {
+        "type": "manifest",
+        "mode": "__STREAM_OR_DOWNLOAD__",
+        "url": "__GDS_MANIFEST_JSON_URL__",
+        "path": "/mount/mount/media/inputs/"
+      }
+    ],
+    "outputs": [],
+    "systemFiles": {
+      "url": "__AWS_S3_LOGS_PATH__",
+      "storageProvider": "aws",
+      "credentials": {
+        "AWS_ACCESS_KEY_ID": "__AWS_ACCESS_KEY_ID__",
+        "AWS_SECRET_ACCESS_KEY": "__AWS_SECRET_ACCESS_KEY__",
+        "AWS_SESSION_TOKEN": "__AWS_SESSION_TOKEN__"
+      }
+    },
+    "environment": {
+      "variables": {
+        "SECURE_AWS_ACCESS_KEY_ID": "__AWS_ACCESS_KEY_ID__",
+        "SECURE_AWS_SECRET_ACCESS_KEY": "__AWS_SECRET_ACCESS_KEY__",
+        "SECURE_AWS_SESSION_TOKEN": "__AWS_SESSION_TOKEN__"
+      },
+      "resources": {
+        "type": "standardhicpu",
+        "size": "small"
+      }
+    },
+    "retryLimit": 0
+  }
+}
