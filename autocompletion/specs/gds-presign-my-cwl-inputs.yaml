@@ -1,0 +1,17 @@
+---
+name: gds-presign-my-cwl-inputs
+
+title: Presign cwl inputs to use in another project
+
+options:
+  - name: --input-json
+    summary: |
+      Path to file
+    type: file
+  - name: --output-json
+    summary: |
+      Path to file
+    type: file
+  - name: --in-place
+    summary: |
+      Write presigned urls back to input jsons
