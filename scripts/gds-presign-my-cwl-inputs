@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+
+#!/usr/bin/env bash
+
+: '
+Iterate through file inputs and convert gds locations to presigned urls
+'
+
+
+print_help(){
+  echo "
+  Usage gds-presign-my-cwl-inputs (--input-json <json-file>)
+                                  [--output-json <output-json>]
+                                  [--in-place]
+
+  Description:
+    Looks through the workflow input object and presigns any file locations.
+    This script does NOT support directories.
+
+  Options:
+    -i / --input-json: The launch version request json file you wish to analyse. Use '-' for stdin
+    -o / --output-json: The output file you would like to write to. Use '-' for stdout. Not compatible with --in-place parameter.
+    --in-place: Write 'in-place', not compatible with the --output-json parameter
+
+  Requirements:
+    * curl
+    * jq
+    * python3
+    * sed (gnutls)
+
+  Environment variables:
+    * ICA_ACCESS_TOKEN
+    * ICA_BASE_URL
+  "
+}
+
+######
+# ARGS
+######
+
+# Get args from the command line
+input_json=""
+output_json=""
+in_place="false"
+
+# Get args from command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -i | --input-json)
+      input_json="$2"
+      shift 1
+      ;;
+    -o | --output-json)
+      output_json="$2"
+      shift 1
+      ;;
+    --in-place)
+      in_place="true"
+      ;;
+    -h | --help)
+      print_help
+      exit 0
+      ;;
+  esac
+  shift 1
+done
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
+
+# Check ICA_BASE_URL env var is set
+if [[ -z "${ICA_BASE_URL-}" ]]; then
+  echo_stderr "Please set ICA_BASE_URL"
+  print_help
+  exit 1
+fi
+
+# Check we're in a project context
+if [[ -z "${ICA_ACCESS_TOKEN-}" ]]; then
+  echo_stderr "Please specify ICA_ACCESS_TOKEN"
+  print_help
+  exit 1
+fi
+
+# Make sure input_json is defined and is a file
+if [[ -z "${input_json}" ]]; then
+  echo_stderr "Please specify --input-json parameter"
+  print_help
+  exit 1
+elif [[ "${input_json}" == "-" ]]; then
+  :
+elif [[ ! -f "${input_json}" ]]; then
+  echo_stderr "--input-json specified as ${input_json} but could not find file."
+  print_help
+  exit 1
+fi
+
+# Check output_json exists (or --in-place is set)
+if [[ "${in_place}" == "true" ]]; then
+  : # Pass
+elif [[ -z "${output_json}" ]]; then
+  echo_stderr "Please specify --output-json parameter"
+  print_help
+  exit 1
+elif [[ "${output_json}" == "-" ]]; then
+  :  # Pass
+elif [[ ! -d "$(dirname "${output_json}")" ]]; then
+  echo_stderr "Parent directory of '${output_json}' does not exist. Please create and try again"
+  exit 1
+fi
+
+# Check not in-place and --input-json = '-'
+if [[ "${in_place}" == "true" && "${input_json}" == "-" ]]; then
+  echo_stderr "Cannot set --in-place when using stdin"
+# Check not in-place and --output-json
+elif [[ "${in_place}" == "true" && -n "${output_json}" ]]; then
+  echo_stderr "Cannot set --in-place when using --output-json"
+fi
+
+# Check token expiry
+check_token_expiry "${ICA_ACCESS_TOKEN}"
+
+# Check json integrity
+if [[ "${input_json}" == "-" ]]; then
+  if ! input_json_str="$(
+    jq --raw-output < /dev/stdin
+  )"; then
+    echo_stderr "Could not confirm stdin '${input_json}' was valid json"
+    return 1
+  fi
+elif ! jq type "${input_json}" >/dev/null 2>&1; then
+  echo_stderr "Could not confirm input json '${input_json}' was a valid json"
+  print_help
+  exit 1
+else
+  input_json_str="$(jq --raw-output < "${input_json}")"
+fi
+
+# Flatten inputs
+flattened_inputs="$(flatten_inputs_from_launch_json "${input_json_str}")"
+
+# Presign flattened inputs
+readarray -t presigned_json_array <<< "$(presign_flatten_inputs "${flattened_inputs}")"
+
+# Edit input json
+edited_json_str="${input_json_str}"
+
+# Iterate through presigned urls
+# Update with string matching
+for row in "${presigned_json_array[@]}"; do
+  key="$(jq --raw-output '.key' <<< "${row}")"
+  value="$(jq --raw-output '.value' <<< "${row}")"
+  edited_json_str="${edited_json_str//${key}/${value}}"
+done
+
+# Copy outputs to output json / stdout / or back to input json
+if [[ "${output_json}" == "-" ]]; then
+  jq --raw-output <<< "${edited_json_str}"
+elif [[ "${in_place}" == "true" ]]; then
+  echo_stderr "Writing presigned urls in-place back to '${input_json}'"
+  jq --raw-output <<< "${edited_json_str}" > "${input_json}"
+else
+  jq --raw-output <<< "${edited_json_str}" > "${output_json}"
+fi
+
