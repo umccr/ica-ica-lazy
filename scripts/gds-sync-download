@@ -172,9 +172,7 @@ if [[ "${write_script_path_set}" == "true" && -z "${write_script_path}" ]]; then
   echo_stderr "Incorrect usage of --write-script-path"
   print_help
   exit 1
-fi
-
-if [[ "${write_script_path}" =~ ^--.* ]]; then
+elif [[ "${write_script_path}" =~ ^--.* ]]; then
   echo_stderr "Incorrect usage of --write-script-path"
   print_help
   exit 1
