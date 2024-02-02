@@ -1,0 +1,206 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+: '
+Run a TES task to upload a sequencing run to basespace
+'
+
+print_help(){
+  echo "
+Usage: gds-bs-upload (--gds-bssh-path gds://bssh-volume-name/Runs/path/to/run_folder/)
+                     (--log-path gds://logs-volume-name/path/to/log/dir/)
+                     [--sample-sheet-name SampleSheet.csv]
+
+Options:
+  --gds-bssh-path        Required, path to sorted bam path that needs to be indexed
+  --log-path             Required, path to log directory
+  --sample-sheet-name:   Optional, the name of the SampleSheet inside the runs folder, defaults to SampleSheet.csv
+  --help                 Optional, print this help message and exit
+
+Requirements:
+  * jq         (v1.5+)
+  * python3 (v3.4+)
+  * curl
+
+Environment:
+  * ICA_BASE_URL
+  * ICA_ACCESS_TOKEN  (make sure you have administration permissions for this project context)
+  * BASESPACE_API_SERVER
+  * BASESPACE_ACCESS_TOKEN
+  "
+}
+
+binaries_check(){
+  : '
+  Check each of the required binaries are available
+  '
+  if ! (type jq python3 curl 1>/dev/null); then
+    return 1
+  fi
+}
+
+# Globals
+TEMPLATE_NAME="gds-bs-upload.json"
+
+# Get args
+gds_bssh_path=""
+log_path=""
+sample_sheet_name="SampleSheet.csv"
+template_path="${ICA_ICA_LAZY_HOME-}/templates/${TEMPLATE_NAME}"
+
+# Get args from command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --gds-bssh-path)
+      gds_bssh_path="$2"
+      shift 1
+      ;;
+    --sample-sheet-name)
+      sample_sheet_name="$2"
+      shift 1
+      ;;
+    -l | --log-path)
+      log_path="$2"
+      shift 1
+      ;;
+    -h | --help)
+      print_help
+      exit 0
+      ;;
+  esac
+  shift 1
+done
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
+# Ensure input / output params are set
+if [[ -z "${gds_bssh_path-}" ]]; then
+  echo_stderr "Please make sure --gds-bssh-path parameter is set"
+  exit 1
+fi
+
+if [[ -z "${log_path-}" ]]; then
+  echo_stderr "Please make sure --log-path parameter is set"
+  exit 1
+fi
+
+# Start
+if [[ -z "${ICA_BASE_URL-}" ]]; then
+    echo "Error: Need to set var \"ICA_BASE_URL\"" 1>&2
+    exit 1
+fi
+
+# Check access token
+if [[ -z "${ICA_ACCESS_TOKEN-}" ]]; then
+    echo "Error: Need to set var \"ICA_ACCESS_TOKEN\"" 1>&2
+    exit 1
+fi
+
+if [[ -z "${BASESPACE_API_SERVER-}" ]]; then
+    echo "Error: Need to set var \"BASESPACE_API_SERVER\"" 1>&2
+    exit 1
+fi
+
+# Check access token
+if [[ -z "${BASESPACE_ACCESS_TOKEN-}" ]]; then
+    echo "Error: Need to set var \"BASESPACE_ACCESS_TOKEN\"" 1>&2
+    exit 1
+fi
+
+# Check gds file exists
+gds_volume_name="$( \
+  get_volume_from_gds_path \
+    "${gds_bssh_path}" \
+)"
+gds_folder_path="$( \
+  get_folder_path_from_gds_path \
+    "${gds_bssh_path}" \
+)"
+
+if ! gds_folder_id="$( \
+  get_folder_id \
+    "${gds_volume_name}" \
+    "${gds_folder_path}" \
+    "${ICA_BASE_URL}" \
+    "${ICA_ACCESS_TOKEN}" \
+)"; then
+  echo_stderr "Could not get folder id from '${gds_bssh_path}', please make sure the gds run exists and you have permissions to access this directory"
+  exit 1
+fi
+
+if [[ -z "${gds_folder_id}" ]]; then
+  echo_stderr "Could not get folder id from '${gds_bssh_path}', please make sure the gds run exists and you have permissions to access this directory"
+  exit 1
+fi
+
+echo_stderr "Got the folder id for '${gds_bssh_path}' as '${gds_folder_id}'"
+
+# Now check samplesheet path is also okay and exists
+sample_sheet_path="${gds_folder_path%/}/${sample_sheet_name}"
+if ! gds_samplesheet_file_id="$( \
+  get_file_id \
+    "${gds_volume_name}" \
+    "${sample_sheet_path}" \
+    "${ICA_BASE_URL}" \
+    "${ICA_ACCESS_TOKEN}" \
+)"; then
+  echo_stderr "${sample_sheet_name}' does not exist in '${gds_bssh_path}'"
+  exit 1
+fi
+
+if [[ -z "${gds_samplesheet_file_id}" ]]; then
+  echo_stderr "${sample_sheet_name}' does not exist in '${gds_bssh_path}'"
+fi
+
+# Populate template
+temp_gds_bs_creation_tes_path="$("$(get_mktemp_binary)" -t "gds_bs_tes.XXX.json")"
+cp "${template_path}" "${temp_gds_bs_creation_tes_path}"
+
+"$(get_sed_binary)" \
+  -i \
+  "
+    s#__BASESPACE_API_SERVER__#${BASESPACE_API_SERVER}#;
+    s#__BASESPACE_ACCESS_TOKEN__#${BASESPACE_ACCESS_TOKEN}#;
+    s#__INPUT_RUN_NAME__#$(basename "${gds_folder_path}")#;
+    s#__INPUT_RUN_GDS_PATH__#${gds_bssh_path}#;
+    s#__SAMPLE_SHEET_NAME__#${sample_sheet_name}#;
+    s#__GDS_SYSTEM_FILES_PATH__#${log_path}#;
+  " \
+  "${temp_gds_bs_creation_tes_path}"
+
+# Launch TES task
+echo_stderr "Launching bs upload TES task"
+if tes_task_id="$( \
+  curl \
+    --silent \
+    --fail \
+    --location \
+    --request POST \
+    --header 'Accept: application/json' \
+    --header 'Content-Type: application/*+json' \
+    --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+    --data "@${temp_gds_bs_creation_tes_path}" \
+    --url "${ICA_BASE_URL}/v1/tasks/runs" |
+  jq --raw-output '.id' \
+)"; then
+  # Successful task generation, can delete the local file
+  rm "${temp_gds_bs_creation_tes_path}"
+fi
+
+echo_stderr "Launching bs runs upload with task run ${tes_task_id}"
+echo_stderr "Once the bs runs upload is complete you may remove the log directory \"${log_path}\""
