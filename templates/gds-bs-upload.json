@@ -1,0 +1,37 @@
+{
+  "name": "gds-bs-transfer",
+  "execution": {
+    "image": {
+      "name": "ghcr.io/umccr/bssh-cli",
+      "tag": "1.5.4"
+    },
+    "command": "bash",
+    "args": [
+      "-c",
+      "BASESPACE_API_SERVER=\"${SECURE_BASESPACE_API_SERVER}\" BASESPACE_ACCESS_TOKEN=\"${SECURE_BASESPACE_ACCESS_TOKEN}\" bs runs upload --verbose --samplesheet __SAMPLE_SHEET_NAME__ /mount/mount/media/inputs/__INPUT_RUN_NAME__"
+    ],
+    "inputs": [
+      {
+        "mode": "download",
+        "type": "Folder",
+        "url": "__INPUT_RUN_GDS_PATH__",
+        "path": "/mount/mount/media/inputs/__INPUT_RUN_NAME__"
+      }
+    ],
+    "outputs": [],
+    "systemFiles": {
+      "url": "__GDS_SYSTEM_FILES_PATH__"
+    },
+    "environment": {
+      "variables": {
+        "SECURE_BASESPACE_API_SERVER": "__BASESPACE_API_SERVER__",
+        "SECURE_BASESPACE_ACCESS_TOKEN": "__BASESPACE_ACCESS_TOKEN__"
+      },
+      "resources": {
+        "type": "standardhicpu",
+        "size": "medium"
+      }
+    },
+    "retryLimit": 0
+  }
+}
