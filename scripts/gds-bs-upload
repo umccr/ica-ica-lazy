@@ -10,11 +10,16 @@ print_help(){
   echo "
 Usage: gds-bs-upload (--gds-bssh-path gds://bssh-volume-name/Runs/path/to/run_folder/)
                      (--log-path gds://logs-volume-name/path/to/log/dir/)
+                     [--instrument NovaSeq]
+                     [--experiment-name RUN_ID]
                      [--sample-sheet-name SampleSheet.csv]
+                     [--configuration bssh_auth_configuration_name]
 
 Options:
   --gds-bssh-path        Required, path to sorted bam path that needs to be indexed
   --log-path             Required, path to log directory
+  --instrument           Optional, the type of instrument used, defaults to NovaSeq
+  --experiment-name      Optional, the name of the experiment, otherwise use the run id in the RunInfo.xml
   --sample-sheet-name:   Optional, the name of the SampleSheet inside the runs folder, defaults to SampleSheet.csv
   --help                 Optional, print this help message and exit
 
@@ -26,8 +31,8 @@ Requirements:
 Environment:
   * ICA_BASE_URL
   * ICA_ACCESS_TOKEN  (make sure you have administration permissions for this project context)
-  * BASESPACE_API_SERVER
-  * BASESPACE_ACCESS_TOKEN
+  * BASESPACE_API_SERVER  ( Optional, you may also specify the configuration if you have a ~/.basespace directory )
+  * BASESPACE_ACCESS_TOKEN ( Optional, you may also specify the configuration if you have a ~/.basespace directory )
   "
 }
 
@@ -35,10 +40,32 @@ binaries_check(){
   : '
   Check each of the required binaries are available
   '
-  if ! (type jq python3 curl 1>/dev/null); then
+  if ! (type jq yq curl 1>/dev/null); then
     return 1
   fi
 }
+
+# Known Instruments
+KNOWN_INSTRUMENTS=( \
+  "HiSeq1000" \
+  "HiSeq1500" \
+  "HiSeq2000" \
+  "HiSeq2500" \
+  "HiSeq3000" \
+  "HiSeq4000" \
+  "HiSeqX" \
+  "NovaSeq5000" \
+  "NovaSeq6000" \
+  "NovaSeqX" \
+  "NovaSeqXPlus" \
+  "MiniSeq" \
+  "MiSeq" \
+  "MiSeqDx" \
+  "NextSeq" \
+  "NextSeqDx" \
+  "NextSeq2000" \
+  "iSeq100" \
+)
 
 # Globals
 TEMPLATE_NAME="gds-bs-upload.json"
@@ -46,6 +73,8 @@ TEMPLATE_NAME="gds-bs-upload.json"
 # Get args
 gds_bssh_path=""
 log_path=""
+instrument="NovaSeq6000"
+experiment_name=""
 sample_sheet_name="SampleSheet.csv"
 template_path="${ICA_ICA_LAZY_HOME-}/templates/${TEMPLATE_NAME}"
 
@@ -58,6 +87,18 @@ while [ $# -gt 0 ]; do
       ;;
     --sample-sheet-name)
       sample_sheet_name="$2"
+      shift 1
+      ;;
+    --instrument)
+      instrument="$2"
+      shift 1
+      ;;
+    --experiment-name)
+      experiment_name="$2"
+      shift 1
+      ;;
+    --configuration)
+      configuration="$2"
       shift 1
       ;;
     -l | --log-path)
@@ -99,27 +140,73 @@ if [[ -z "${log_path-}" ]]; then
   exit 1
 fi
 
+# Check binaries
+if ! binaries_check 1>/dev/null 2>&1; then
+  echo_stderr "Error: Need to have jq, yq, curl installed"
+  exit 1
+fi
+
+# Check instrument
+if ! [[ " ${KNOWN_INSTRUMENTS[*]} " =~ ${instrument} ]]; then
+  echo_stderr "Error: Instrument '${instrument}' is not a known instrument"
+  exit 1
+fi
+
 # Start
 if [[ -z "${ICA_BASE_URL-}" ]]; then
-    echo "Error: Need to set var \"ICA_BASE_URL\"" 1>&2
+    echo_stderr "Error: Need to set var \"ICA_BASE_URL\""
     exit 1
 fi
 
 # Check access token
 if [[ -z "${ICA_ACCESS_TOKEN-}" ]]; then
-    echo "Error: Need to set var \"ICA_ACCESS_TOKEN\"" 1>&2
+    echo_stderr "Error: Need to set var \"ICA_ACCESS_TOKEN\""
     exit 1
 fi
 
-if [[ -z "${BASESPACE_API_SERVER-}" ]]; then
-    echo "Error: Need to set var \"BASESPACE_API_SERVER\"" 1>&2
+if [[ -z "${BASESPACE_API_SERVER-}" && -z "${configuration-}" ]]; then
+    echo_stderr "Error: Need to set var \"BASESPACE_API_SERVER\""
     exit 1
+elif [[ -z "${BASESPACE_API_SERVER-}" && ! -r "${HOME}/.basespace/${configuration}.cfg" ]]; then
+    echo_stderr "Could not find path to configuration file ${HOME}/.basespace/${configuration}.cfg"
+    exit 1
+elif [[ -z "${BASESPACE_API_SERVER-}" ]]; then
+  if ! basespace_api_server="$( \
+      sed \
+        --regexp-extended \
+        's%\s+=\s+%=%' \
+        "${HOME}/.basespace/${configuration}.cfg" | \
+      grep 'apiServer' | \
+      cut -d'=' -f2
+    )"; then
+      echo_stderr "Could not collect api server from ${HOME}/.basespace/${configuration}.cfg"
+      exit 1
+    fi
+else
+  basespace_api_server="${BASESPACE_API_SERVER}"
 fi
 
 # Check access token
-if [[ -z "${BASESPACE_ACCESS_TOKEN-}" ]]; then
-    echo "Error: Need to set var \"BASESPACE_ACCESS_TOKEN\"" 1>&2
+if [[ -z "${BASESPACE_ACCESS_TOKEN-}" && -z "${configuration-}" ]]; then
+    echo_stderr "Error: Need to set var \"BASESPACE_ACCESS_TOKEN\""
     exit 1
+elif [[ -z "${BASESPACE_ACCESS_TOKEN-}" && ! -r "${HOME}/.basespace/${configuration}.cfg" ]]; then
+    echo_stderr "Could not find path to configuration file ${HOME}/.basespace/${configuration}.cfg"
+    exit 1
+elif [[ -z "${BASESPACE_ACCESS_TOKEN-}" ]]; then
+  if ! basespace_access_token="$( \
+    sed \
+      --regexp-extended \
+      's%\s+=\s+%=%' \
+      "${HOME}/.basespace/${configuration}.cfg" | \
+    grep 'accessToken' | \
+    cut -d'=' -f2
+  )"; then
+    echo_stderr "Could not collect access token from ${HOME}/.basespace/${configuration}.cfg"
+    exit 1
+  fi
+else
+  basespace_access_token="${BASESPACE_ACCESS_TOKEN}"
 fi
 
 # Check gds file exists
@@ -167,6 +254,22 @@ if [[ -z "${gds_samplesheet_file_id}" ]]; then
   echo_stderr "${sample_sheet_name}' does not exist in '${gds_bssh_path}'"
 fi
 
+# Get experiment name if it doesn't exist
+if [[ -z "${experiment_name}" ]]; then
+  if ! experiment_name="$(
+    gds-view \
+      --gds-path "${gds_bssh_path%/}/RunInfo.xml" \
+      --to-stdout | \
+    yq \
+      --input-format xml \
+      --output-format json | \
+    jq --raw-output \
+      '.RunInfo.Run["+@Id"]' \
+  )"; then
+    echo_stderr "Could not get run id from RunInfo Xml at ${gds_bssh_path%/}/RunInfo.xml"
+  fi
+fi
+
 # Populate template
 temp_gds_bs_creation_tes_path="$("$(get_mktemp_binary)" -t "gds_bs_tes.XXX.json")"
 cp "${template_path}" "${temp_gds_bs_creation_tes_path}"
@@ -174,12 +277,14 @@ cp "${template_path}" "${temp_gds_bs_creation_tes_path}"
 "$(get_sed_binary)" \
   -i \
   "
-    s#__BASESPACE_API_SERVER__#${BASESPACE_API_SERVER}#;
-    s#__BASESPACE_ACCESS_TOKEN__#${BASESPACE_ACCESS_TOKEN}#;
+    s#__BASESPACE_API_SERVER__#${basespace_api_server}#;
+    s#__BASESPACE_ACCESS_TOKEN__#${basespace_access_token}#;
     s#__INPUT_RUN_NAME__#$(basename "${gds_folder_path}")#;
+    s#__EXPERIMENT_NAME__#${experiment_name}#;
+    s#__INSTRUMENT__#${instrument}#;
     s#__INPUT_RUN_GDS_PATH__#${gds_bssh_path}#;
     s#__SAMPLE_SHEET_NAME__#${sample_sheet_name}#;
-    s#__GDS_SYSTEM_FILES_PATH__#${log_path}#;
+    s#__GDS_SYSTEM_FILES_PATH__#${log_path%/}#;
   " \
   "${temp_gds_bs_creation_tes_path}"
 
@@ -190,6 +295,7 @@ if tes_task_id="$( \
     --silent \
     --fail \
     --location \
+    --show-error \
     --request POST \
     --header 'Accept: application/json' \
     --header 'Content-Type: application/*+json' \
