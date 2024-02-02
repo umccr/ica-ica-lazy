@@ -8,11 +8,11 @@
     "command": "bash",
     "args": [
       "-c",
-      "BASESPACE_API_SERVER=\"${SECURE_BASESPACE_API_SERVER}\" BASESPACE_ACCESS_TOKEN=\"${SECURE_BASESPACE_ACCESS_TOKEN}\" bs runs upload --verbose --samplesheet __SAMPLE_SHEET_NAME__ /mount/mount/media/inputs/__INPUT_RUN_NAME__"
+      "BASESPACE_API_SERVER=\"${SECURE_BASESPACE_API_SERVER}\" BASESPACE_ACCESS_TOKEN=\"${SECURE_BASESPACE_ACCESS_TOKEN}\" bs runs upload --verbose --samplesheet __SAMPLE_SHEET_NAME__ /mount/mount/media/inputs/__INPUT_RUN_NAME__ --name __EXPERIMENT_NAME__ --instrument __INSTRUMENT__"
     ],
     "inputs": [
       {
-        "mode": "download",
+        "mode": "stream",
         "type": "Folder",
         "url": "__INPUT_RUN_GDS_PATH__",
         "path": "/mount/mount/media/inputs/__INPUT_RUN_NAME__"
