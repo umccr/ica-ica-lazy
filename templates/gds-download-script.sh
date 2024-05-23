@@ -138,7 +138,7 @@ compute_local_etag(){
   num_parts="$(python3 -c "from math import ceil; print(ceil(${file_size_mb} / ${block_size_mb}))")"
 
   # Check how many parts, we may just need to return the md5sum
-  if [[ "${num_parts}" == "1" ]]; then
+  if [[ "${num_parts}" -le "1" ]]; then
     "$(get_md5sum_binary)" "${file_path}" | cut -d' ' -f1
     return 0
   fi
