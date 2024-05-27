@@ -1,0 +1,37 @@
+{
+  "name": "ega-submit",
+  "execution": {
+    "image": {
+      "name": "ghcr.io/umccr/egacrypt",
+      "tag": "dev-2"
+    },
+    "command": "bash",
+    "args": [
+      "-c",
+      ""
+    ],
+    "inputs": [
+      {
+        "mode": "stream",
+        "type": "File",
+        "url": "__GDS_FILE_URL__",
+        "path": "/mount/mount/media/inputs/__GDS_FILE_NAME__"
+      }
+    ],
+    "outputs": [],
+    "systemFiles": {
+      "url": "__GDS_SYSTEM_FILES_PATH__"
+    },
+    "environment": {
+      "variables": {
+        "EGA_BOX": "ega-xxxx",
+        "EGA_PASSWORD": ""
+      },
+      "resources": {
+        "type": "standard",
+        "size": "medium"
+      }
+    },
+    "retryLimit": 0
+  }
+}
