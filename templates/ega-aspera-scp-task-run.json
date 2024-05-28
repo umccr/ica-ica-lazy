@@ -7,15 +7,9 @@
     },
     "command": "/home/aspera/.aspera/connect/bin/ascp",
     "args": [
-      "-P",
-      "33001",
-      "-O",
-      "33001",
-      "-QT",
-      "-L",
-      "-",
-      "/mount/mount/media/inputs/",
-      "${USERNAME}:${SECURE_PASSWORD}@${HOSTNAME}:${EGA_DEST_PATH}"
+      "bash",
+      "-c",
+      "/home/aspera/.aspera/connect/bin/ascp -P33001 -O33001 -QT -L- /mount/mount/media/inputs/ ${USERNAME}:${SECURE_PASSWORD}@${HOSTNAME}:${EGA_DEST_PATH}"
     ],
     "inputs": [
       {
