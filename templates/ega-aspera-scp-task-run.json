@@ -9,7 +9,7 @@
     "args": [
       "bash",
       "-c",
-      "ASPERA_SCP_PASS=${SECURE_ASPERA_PASSWORD} /home/aspera/.aspera/connect/bin/ascp -P33001 -O33001 -QT -L- /mount/mount/media/inputs/ ${USERNAME}@${HOSTNAME}:${EGA_DEST_PATH}"
+      "ASPERA_SCP_PASS=\"${SECURE_ASPERA_PASSWORD}\" /home/aspera/.aspera/connect/bin/ascp -P33001 -O33001 -QT -L- /mount/mount/media/inputs/ \"${USERNAME}@${HOSTNAME}:${EGA_DEST_PATH}\""
     ],
     "inputs": [
       {
