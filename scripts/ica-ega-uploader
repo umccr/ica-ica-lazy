@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+
+: '
+Upload a directory to EGA
+'
+
+# Set to fail
+set -euo pipefail
+
+# Globals
+EGA_DEFAULT_HOSTNAME="fasp.ega.ebi.ac.uk"
+TEMPLATE_DIR="${ICA_ICA_LAZY_HOME-}/templates"
+EGA_ASPERA_TEMPLATE_NAME="${TEMPLATE_DIR}/ega-aspera-scp-task-run.json"
+
+###########
+# FUNCTIONS
+###########
+
+# Help function
+print_help(){
+  echo "
+        Usage: ica-ega-uploader (--gds-path gds://volume-name/path-to-gds-dir/)
+                                (--logs-path gds://volume-name/temp/path/to/logs_dir/)
+                                (--ega-dest-directory /path/to/ega-dest-directory)
+                                [--ega-hostname ega-hostname]
+                                [--ega-username ega-username]
+                                [--ega-password ega-password]
+
+        Description:
+          ICA EGA Uploader, a tool to upload a directory to EGA
+
+        Options:
+            --gds-path:            GDS Path containing data to upload
+            --logs-path:           GDS Path to logs directory
+            --ega-hostname         The EGA Hostname to upload to (default is '${EGA_DEFAULT_HOSTNAME}')
+            --ega-username         The EGA Username  (alternatively use the env var EGA_USERNAME or wait for input prompt)
+            --ega-password         The EGA Password  (ideally use the env var EGA_PASSWORD or wait for input prompt)
+
+        Requirements:
+          * aws
+          * jq     (v1.5+)
+          * python3 (v3.4+)
+
+        Environment:
+          * ICA_BASE_URL
+          * ICA_ACCESS_TOKEN
+          * EGA_HOSTNAME
+          * EGA_USERNAME
+          * EGA_PASSWORD
+
+        A token with at least read-only scope must be registered for the source path.
+        A token with at least admin scope must be registered for the destination path
+
+        Example:
+          ica-ega-uploader --gds-path gds://production/analysis_data/sbj123/path/to/data --egs-dest-directory /path/to/cohort-id/ --logs-path gds://production/temp/ega_uploader/sbj123/
+        "
+}
+
+###########
+# GET ARGS
+###########
+
+# Get args
+src_gds_path=""
+logs_gds_path=""
+ega_dest_directory=""
+ega_hostname="${EGA_DEFAULT_HOSTNAME-}"
+ega_username="${EGA_USERNAME-}"
+ega_password="${EGA_PASSWORD-}"
+
+
+# Get args from command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --gds-path)
+      src_gds_path="$2"
+      shift 1
+      ;;
+    --logs-path)
+      logs_gds_path="$2"
+      shift 1
+      ;;
+    --ega-dest-directory)
+      ega_dest_directory="$2"
+      shift 1
+      ;;
+    --ega-hostname)
+      ega_hostname="$2"
+      shift 1
+      ;;
+    --ega-username)
+      ega_username="$2"
+      shift 1
+      ;;
+    --ega-password)
+      ega_password="$2"
+      shift 1
+      ;;
+    -h | --help)
+      print_help
+      exit 0
+      ;;
+  esac
+  shift 1
+done
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
+# Ensure gds_path params are set
+if [[ -z "${src_gds_path}" ]]; then
+  echo_stderr "Please make sure --gds-path parameter is set"
+  exit 1
+fi
+if [[ -z "${ega_dest_directory}" ]]; then
+  echo_stderr "Please make sure --ega-dest-directory parameter is set"
+  exit 1
+fi
+if [[ -z "${logs_gds_path}" ]]; then
+  echo_stderr "Please make sure --logs-path parameter is set"
+  exit 1
+fi
+
+# Ensure ica env vars are set
+if [[ -z "${ICA_BASE_URL-}" ]]; then
+    echo "Error: Need to set var \"ICA_BASE_URL\"" 1>&2
+    exit 1
+fi
+if [[ -z "${ICA_ACCESS_TOKEN-}" ]]; then
+    echo "Error: Need to set var \"ICA_ACCESS_TOKEN\"" 1>&2
+    exit 1
+fi
+
+# Get ega hostname from env
+if [[ -n "${EGA_HOSTNAME-}" ]]; then
+  ega_hostname="${EGA_HOSTNAME}"
+fi
+
+# Get ega username
+if [[ -z "${ega_username}" ]]; then
+  read -r -p "Enter EGA Username: " ega_username
+fi
+
+# Get ega password
+if [[ -z "${ega_password}" ]]; then
+  read -r -s -p "Enter EGA Password: " ega_password
+  echo ""
+fi
+
+# Get the src stuff volume name / folder path
+src_volume_name="$(get_volume_from_gds_path "${src_gds_path}")"
+src_folder_path="$(get_folder_path_from_gds_path "${src_gds_path}")"
+
+echo_stderr "Checking source directory is good"
+if ! check_path_is_folder "${src_volume_name}" "${src_folder_path}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"; then
+  echo_stderr "Could not confirm ${src_gds_path} was a valid gds folder"
+  exit 1
+fi
+
+# Get the logs stuff
+echo_stderr "Checking log directory is good"
+logs_volume_name="$(get_volume_from_gds_path "${logs_gds_path}")"
+logs_folder_path="$(get_folder_path_from_gds_path "${logs_gds_path}")"
+logs_gds_path="gds://${logs_volume_name}${logs_folder_path}$(date +%Y%m%d%H%M%S)/"
+
+
+# Create temp file with template
+temp_aspera_task="$("$(get_mktemp_binary)" -t "temp_aspera_task.XXX.json")"
+cp "${EGA_ASPERA_TEMPLATE_NAME}" "${temp_aspera_task}"
+
+# Update template TES json
+echo_stderr "Populating the Aspera TES task"
+"$(get_sed_binary)" -i "s%__USERNAME__%${ega_username}%" "${temp_aspera_task}"
+"$(get_sed_binary)" -i "s%__PASSWORD__%${ega_password}%" "${temp_aspera_task}"
+"$(get_sed_binary)" -i "s%__HOSTNAME__%${ega_hostname}%" "${temp_aspera_task}"
+"$(get_sed_binary)" -i "s%__EGA_DEST_PATH__%${ega_dest_directory}%" "${temp_aspera_task}"
+"$(get_sed_binary)" -i "s%__GDS_INPUT_PATH__%${src_gds_path}%" "${temp_aspera_task}"
+"$(get_sed_binary)" -i "s%__GDS_SYSTEM_FILES_PATH__%${logs_gds_path}logs_aspera%" "${temp_aspera_task}"
+
+# Launch TES task
+echo_stderr "Launching Aspera TES task"
+tes_aspera_task_id="$( \
+  curl \
+    --silent \
+    --fail \
+    --location \
+    --request POST \
+    --header 'Accept: application/json' \
+    --header 'Content-Type: application/*+json' \
+    --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+    --data "@${temp_aspera_task}" \
+    --url "${ICA_BASE_URL}/v1/tasks/runs" | \
+  jq --raw-output '.id' \
+)"
+
+echo_stderr "Launched ${tes_aspera_task_id}"
+
+rm "${temp_aspera_task}"

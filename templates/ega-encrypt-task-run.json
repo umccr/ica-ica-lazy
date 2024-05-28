@@ -1,0 +1,45 @@
+{
+  "name": "ega-encrypt-task-run",
+  "execution": {
+    "image": {
+      "name": "ghcr.io/umccr/egacrypt",
+      "tag": "latest"
+    },
+    "command": "/opt/bin/ega-cryptor.sh",
+    "args": [
+      "-f",
+      "-i", "/mount/mount/media/inputs/",
+      "-o", "/mount/mount/media/outputs/"
+    ],
+    "inputs": [
+      {
+        "mode": "download",
+        "type": "File",
+        "url": "__GDS_INPUT_PATH__",
+        "path": "/mount/mount/media/inputs/__GDS_INPUT_FILE_NAME__"
+      },
+      {
+        "mode": "download",
+        "type": "File",
+        "url": "__GDS_INPUT_PATH__.bai",
+        "path": "/mount/mount/media/inputs/__GDS_INPUT_FILE_NAME__.bai"
+      }
+    ],
+    "outputs": [
+      {
+        "path": "/mount/mount/media/outputs/",
+        "url": "__GDS_OUTPUT_PATH__"
+      }
+    ],
+    "systemFiles": {
+      "url": "__GDS_SYSTEM_FILES_PATH__"
+    },
+    "environment": {
+      "resources": {
+        "type": "standardhicpu",
+        "size": "medium"
+      }
+    },
+    "retryLimit": 0
+  }
+}
