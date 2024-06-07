@@ -208,4 +208,4 @@ tes_aspera_task_id="$( \
 
 echo_stderr "Launched ${tes_aspera_task_id}"
 
-rm "${temp_aspera_task}"
+#rm "${temp_aspera_task}"

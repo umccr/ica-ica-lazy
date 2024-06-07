@@ -2,41 +2,34 @@
   "name": "gds-migrate-to-aws",
   "execution": {
     "image": {
-      "name": "ghcr.io/umccr/aws-cli-with-extras",
-      "tag": "2.9.19"
+      "name": "ghcr.io/umccr/rclone",
+      "tag": "1.66.0"
     },
     "command": "bash",
     "args": [
       "-c",
-      "AWS_ACCESS_KEY_ID=\"${SECURE_AWS_ACCESS_KEY_ID}\" AWS_SECRET_ACCESS_KEY=\"${SECURE_AWS_SECRET_ACCESS_KEY}\" AWS_SESSION_TOKEN=\"${SECURE_AWS_SESSION_TOKEN}\" aws s3 sync /mount/mount/media/inputs/ \"__AWS_S3_DEST_PATH__\"__ADDITIONAL_S3_SYNC_ARGS__"
+      "rclone-config-maker --src-access-key-id \"${SECURE_SRC_AWS_ACCESS_KEY_ID}\" --src-secret-access-key \"${SECURE_SRC_AWS_SECRET_ACCESS_KEY}\" --src-session-token \"${SECURE_SRC_AWS_SESSION_TOKEN}\" --src-region \"${SRC_AWS_REGION}\" --dest-access-key-id \"${SECURE_DEST_AWS_ACCESS_KEY_ID}\" --dest-secret-access-key \"${SECURE_DEST_AWS_SECRET_ACCESS_KEY}\" --dest-session-token \"${SECURE_DEST_AWS_SESSION_TOKEN}\" --dest-region \"${DEST_AWS_REGION}\" --config-output-path \"${RCLONE_CONFIG}\"; rclone sync__ADDITIONAL_RCLONE_SYNC_ARGS__ \"src:__SRC_AWS_BUCKET_NAME__/__SRC_AWS_KEY_PREFIX__\" \"dest:__DEST_AWS_BUCKET_NAME____DEST_AWS_KEY_PREFIX__\""
     ],
-    "inputs": [
-      {
-        "type": "manifest",
-        "mode": "__STREAM_OR_DOWNLOAD__",
-        "url": "__GDS_MANIFEST_JSON_URL__",
-        "path": "/mount/mount/media/inputs/"
-      }
-    ],
+    "inputs": [],
     "outputs": [],
     "systemFiles": {
-      "url": "__AWS_S3_LOGS_PATH__",
-      "storageProvider": "aws",
-      "credentials": {
-        "AWS_ACCESS_KEY_ID": "__AWS_ACCESS_KEY_ID__",
-        "AWS_SECRET_ACCESS_KEY": "__AWS_SECRET_ACCESS_KEY__",
-        "AWS_SESSION_TOKEN": "__AWS_SESSION_TOKEN__"
-      }
+      "url": "__GDS_SYSTEM_FILES_PATH__"
     },
     "environment": {
       "variables": {
-        "SECURE_AWS_ACCESS_KEY_ID": "__AWS_ACCESS_KEY_ID__",
-        "SECURE_AWS_SECRET_ACCESS_KEY": "__AWS_SECRET_ACCESS_KEY__",
-        "SECURE_AWS_SESSION_TOKEN": "__AWS_SESSION_TOKEN__"
+        "SECURE_SRC_AWS_ACCESS_KEY_ID": "__SRC_AWS_ACCESS_KEY_ID__",
+        "SECURE_SRC_AWS_SECRET_ACCESS_KEY": "__SRC_AWS_SECRET_ACCESS_KEY__",
+        "SECURE_SRC_AWS_SESSION_TOKEN": "__SRC_AWS_SESSION_TOKEN__",
+        "SRC_AWS_REGION": "__SRC_AWS_REGION__",
+        "SECURE_DEST_AWS_ACCESS_KEY_ID": "__DEST_AWS_ACCESS_KEY_ID__",
+        "SECURE_DEST_AWS_SECRET_ACCESS_KEY": "__DEST_AWS_SECRET_ACCESS_KEY__",
+        "SECURE_DEST_AWS_SESSION_TOKEN": "__DEST_AWS_SESSION_TOKEN__",
+        "DEST_AWS_REGION": "__DEST_AWS_REGION__",
+        "RCLONE_CONFIG": "/tmp/rclone-config-path.cfg"
       },
       "resources": {
         "type": "standardhicpu",
-        "size": "small"
+        "size": "medium"
       }
     },
     "retryLimit": 0

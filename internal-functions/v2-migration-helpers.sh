@@ -12,9 +12,12 @@ icav2_get_project_id_from_project_name() {
   project_name="$1"
   icav2_base_url="$2"
   icav2_access_token="$3"
+  local page_size
+
+  page_size=1000
 
   curl --silent --fail --location --request "GET" \
-    --url "${icav2_base_url}/api/projects" \
+    --url "${icav2_base_url}/api/projects?pageSize=${page_size}" \
     --header 'Accept: application/vnd.illumina.v3+json' \
     --header "Authorization: Bearer ${icav2_access_token}" | \
   jq --raw-output \
@@ -227,13 +230,6 @@ get_v2_folder_aws_credentials(){
   jq --raw-output \
     '.awsTempCredentials'
 }
-
-
-#!/usr/bin/env bash
-
-: '
-
-'
 
 get_aws_access_creds_from_folder_id() {
   : '
