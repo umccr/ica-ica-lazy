@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+
+: '
+Upload a directory to EGA
+'
+
+# Set to fail
+set -euo pipefail
+
+# Globals
+EGA_HOSTNAME="fasp.ega.ebi.ac.uk"
+TEMPLATE_DIR="${ICA_ICA_LAZY_HOME-}/templates"
+EGA_ENCRYPT_TEMPLATE_NAME="${TEMPLATE_DIR}/ega-encrypt-task-run.json"
+
+###########
+# FUNCTIONS
+###########
+
+# Help function
+print_help(){
+  echo "
+        Usage: ica-ega-encryptor (--gds-bam-path gds://volume-name/path-to-gds-bam-file.bam)
+                                 (--output-path gds://volume-name/path-to-folder/)
+                                 (--logs-path gds://volume-name/temp/path/to/file)
+
+        Description:
+          ICA EGA Uploader, a tool to upload a directory to EGA
+
+        Options:
+            --gds-bam-path:        GDS File Path containing bam file to encrypt
+            --output-path:         GDS Folder Path to write encrypted data to
+            --logs-path:           GDS Folder Path to write logs to
+
+        Requirements:
+          * aws
+          * jq     (v1.5+)
+          * python3 (v3.4+)
+
+        Environment:
+          * ICA_BASE_URL
+          * ICA_ACCESS_TOKEN
+
+        A token with at least read-only scope must be registered for the source path.
+        A token with at least admin scope must be registered for the destination path
+
+        Example:
+          ica-ega-encryptor --gds-bam-path gds://production/analysis_data/sbj123/path/to/data.bam --output-path gds://production/temp/ega_uploader/sbj123/data.bam
+        "
+}
+
+###########
+# GET ARGS
+###########
+
+# Get args
+src_gds_path=""
+dest_gds_path=""
+logs_gds_path=""
+
+# Get args from command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --gds-bam-path)
+      src_gds_path="$2"
+      shift 1
+      ;;
+    --output-path)
+      dest_gds_path="$2"
+      shift 1
+      ;;
+    --logs-path)
+      logs_gds_path="$2"
+      shift 1
+      ;;
+    -h | --help)
+      print_help
+      exit 0
+      ;;
+  esac
+  shift 1
+done
+
+###########ICA-ICA-LAZY SETUP ########################################
+
+if [[ -z "${ICA_ICA_LAZY_HOME-}" ]]; then
+  echo "Error - please ensure env var 'ICA_ICA_LAZY_HOME' is set" 1>&2
+  exit 1
+fi
+
+if [[ -d "${ICA_ICA_LAZY_HOME}/internal-functions" ]]; then
+  for f in "${ICA_ICA_LAZY_HOME}/internal-functions/"*".sh"; do
+      # shellcheck source=../internal-functions/*.sh
+      source "$f"
+  done
+fi
+
+##########END ICA-ICA-LAZY SETUP ####################################
+
+# Ensure gds_path params are set
+if [[ -z "${src_gds_path}" ]]; then
+  echo_stderr "Please make sure --gds-bam-path parameter is set"
+  exit 1
+fi
+if [[ -z "${dest_gds_path}" ]]; then
+  echo_stderr "Please make sure --output-path parameter is set"
+  exit 1
+fi
+if [[ -z "${logs_gds_path}" ]]; then
+  echo_stderr "Please make sure --logs-path parameter is set"
+  exit 1
+fi
+
+# Ensure ica env vars are set
+if [[ -z "${ICA_BASE_URL-}" ]]; then
+    echo "Error: Need to set var \"ICA_BASE_URL\"" 1>&2
+    exit 1
+fi
+if [[ -z "${ICA_ACCESS_TOKEN-}" ]]; then
+    echo "Error: Need to set var \"ICA_ACCESS_TOKEN\"" 1>&2
+    exit 1
+fi
+
+# Get the src stuff volume name / folder path
+src_volume_name="$(get_volume_from_gds_path "${src_gds_path}")"
+src_file_path="$(get_file_path_from_gds_path "${src_gds_path}")"
+
+echo_stderr "Confirming that ${src_gds_path} exists"
+if ! get_file_id "${src_volume_name}" "${src_file_path}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"; then
+  echo_stderr "Could not confirm ${src_gds_path} exists"
+  exit 1
+fi
+
+src_file_path_index="${src_file_path}.bai"
+echo_stderr "Confirming that ${src_gds_path} has a bam index file"
+if ! get_file_id "${src_volume_name}" "${src_file_path_index}" "${ICA_BASE_URL}" "${ICA_ACCESS_TOKEN}"; then
+  echo_stderr "Could not find ${src_gds_path} index file"
+  exit 1
+fi
+echo_stderr "Found ${src_gds_path}.bai"
+
+# Get the dest stuff
+echo_stderr "Checking output directory is good"
+dest_volume_name="$(get_volume_from_gds_path "${dest_gds_path}")"
+dest_folder_path="$(get_folder_path_from_gds_path "${dest_gds_path}")"
+dest_gds_path="gds://${dest_volume_name}${dest_folder_path}"
+
+# Get the logs stuff
+echo_stderr "Checking log directory is good"
+logs_volume_name="$(get_volume_from_gds_path "${logs_gds_path}")"
+logs_folder_path="$(get_folder_path_from_gds_path "${logs_gds_path}")"
+logs_gds_path="gds://${logs_volume_name}${logs_folder_path}$(date +%Y%m%d%H%M%S)/"
+
+# Create temp file with template
+temp_encrypt_task="$("$(get_mktemp_binary)" -t "temp_encrypt_task.XXX.json")"
+cp "${EGA_ENCRYPT_TEMPLATE_NAME}" "${temp_encrypt_task}"
+
+# Update template TES json
+echo_stderr "Populating Encrypt TES task template"
+"$(get_sed_binary)" -i "s%__GDS_INPUT_PATH__%${src_gds_path}%" "${temp_encrypt_task}"
+"$(get_sed_binary)" -i "s%__GDS_INPUT_FILE_NAME__%$(basename "${src_file_path}")%" "${temp_encrypt_task}"
+"$(get_sed_binary)" -i "s%__GDS_OUTPUT_PATH__%${dest_gds_path}%" "${temp_encrypt_task}"
+"$(get_sed_binary)" -i "s%__GDS_SYSTEM_FILES_PATH__%${logs_gds_path}logs_encrypt%" "${temp_encrypt_task}"
+
+# Launch the tes task
+echo_stderr "Launching Encrypt TES task"
+tes_encrypt_task_id="$( \
+  curl \
+    --silent \
+    --fail \
+    --location \
+    --request POST \
+    --header 'Accept: application/json' \
+    --header 'Content-Type: application/*+json' \
+    --header "Authorization: Bearer ${ICA_ACCESS_TOKEN}" \
+    --data "@${temp_encrypt_task}" \
+    --url "${ICA_BASE_URL}/v1/tasks/runs" | \
+  jq --raw-output '.id' \
+)"
+
+echo_stderr "Launched ${tes_encrypt_task_id}"
+
+rm "${temp_encrypt_task}"

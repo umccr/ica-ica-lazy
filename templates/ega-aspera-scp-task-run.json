@@ -1,0 +1,40 @@
+{
+  "name": "ega-aspera-scp-task-run",
+  "execution": {
+    "image": {
+      "name": "ghcr.io/umccr/aspera",
+      "tag": "latest"
+    },
+    "command": "/home/aspera/.aspera/connect/bin/ascp",
+    "args": [
+      "bash",
+      "-c",
+      "ASPERA_SCP_PASS=\"${SECURE_ASPERA_PASSWORD}\" /home/aspera/.aspera/connect/bin/ascp -P33001 -O33001 -QT -L- /mount/mount/media/inputs/ \"${USERNAME}@${HOSTNAME}:${EGA_DEST_PATH}\""
+    ],
+    "inputs": [
+      {
+        "mode": "stream",
+        "type": "Folder",
+        "url": "__GDS_INPUT_PATH__",
+        "path": "/mount/mount/media/inputs/"
+      }
+    ],
+    "outputs": [],
+    "systemFiles": {
+      "url": "__GDS_SYSTEM_FILES_PATH__"
+    },
+    "environment": {
+      "variables": {
+        "HOSTNAME": "__HOSTNAME__",
+        "USERNAME": "__USERNAME__",
+        "EGA_DEST_PATH": "__EGA_DEST_PATH__",
+        "SECURE_ASPERA_PASSWORD": "__PASSWORD__"
+      },
+      "resources": {
+        "type": "standardhicpu",
+        "size": "medium"
+      }
+    },
+    "retryLimit": 0
+  }
+}
